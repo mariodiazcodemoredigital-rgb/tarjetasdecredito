@@ -23,11 +23,11 @@
     <p>Este nombre aparece en el saludo del dashboard y en el menú lateral.</p>
     <div class="field">
         <label>Nombre(s)</label>
-        <input @bind="nombres" @bind:event="oninput" placeholder="Mario" />
+        <input @bind="nombres" @bind:event="oninput" placeholder="Nombre(s)" />
     </div>
     <div class="field">
         <label>Apellidos</label>
-        <input @bind="apellidos" @bind:event="oninput" placeholder="Díaz" />
+        <input @bind="apellidos" @bind:event="oninput" placeholder="Apellidos" />
     </div>
     <button class="btn" style="width:auto;" disabled="@guardandoPerfil" @onclick="GuardarPerfilAsync">
         @(guardandoPerfil ? "Guardando..." : "Guardar")

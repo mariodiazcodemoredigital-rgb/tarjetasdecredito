@@ -188,6 +188,12 @@ Convenciones nuevas, aplicables a cualquier pantalla interna nueva:
 
 `.loading-progress`/`.loading-progress-text` (`index.html` + `app.css`) son el spinner que Blazor muestra mientras descarga el runtime WASM, antes de que la app en sí exista. **Bug real reportado por el usuario probando en su celular (2026-09-10)**: el porcentaje/texto ("Cargando"/"73%") no quedaba centrado dentro del círculo — venían del template default de .NET, que posiciona el texto con un cálculo de número mágico (`inset: calc(40vh + 3.25rem) 0 auto 0`) que no coincide realmente con el centro del círculo. Corregido haciendo que `.loading-progress-text` use exactamente la misma caja que `.loading-progress` (mismo `inset`/`width`/`height`/`margin`) y centrando el texto con flexbox dentro de esa caja, en vez de intentar calcular la posición a mano.
 
+## Bloqueo de zoom táctil
+
+**Decisión (Sprint 33, 2026-09-10)**: la app bloquea el gesto de pellizco-para-zoom en todo momento — `maximum-scale=1.0, user-scalable=no` en el `<meta name="viewport">` de `index.html` (mecanismo principal) + `touch-action: pan-x pan-y` en `html, body` (refuerzo en CSS, no afecta el scroll/paneo normal de cada página). **Bug real reportado por el usuario probando en su celular**: al hacer zoom con los dedos, o simplemente al enfocar/cerrar el teclado táctil (que también dispara un cambio de escala del viewport en iOS/Android), la app perdía su encuadre fijo y quedaba con scroll libre en las cuatro direcciones — rompía por completo la sensación de "app instalada" en cualquier pantalla, no solo login.
+
+**Trade-off de accesibilidad, asumido a propósito**: deshabilitar el zoom del usuario contradice WCAG 1.4.4 (el usuario no puede ampliar contenido si lo necesita) — es una decisión de producto explícita del usuario para que la PWA se sienta como app nativa, no un descuido. Si en algún momento se reporta que esto afecta a un usuario que sí necesita zoom, hay que revisar esta decisión con el usuario antes de revertirla.
+
 ## Accesibilidad
 
 - Contraste mínimo AA en ambos temas. Todos los montos y fechas se anuncian con texto accesible (no solo color) — ej. una fecha límite próxima no se marca solo en rojo, lleva ícono + texto "Vence en 2 días".

@@ -3,7 +3,11 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- maximum-scale=1/user-scalable=no bloquea el pellizco-para-zoom (ver SPEC-005 "Bloqueo de zoom
+         táctil"): bug real reportado por el usuario — al hacer zoom con los dedos o al enfocar/cerrar
+         el teclado móvil, la app perdía su encuadre fijo y aparecía scroll libre en todas direcciones,
+         rompiendo la sensación de app instalada. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#3B5BFE" />
     <title>Tarjetas de Crédito</title>
     <base href="/" />

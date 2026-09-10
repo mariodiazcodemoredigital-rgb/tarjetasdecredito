@@ -275,6 +275,21 @@ Convención: `[ ]` pendiente, `[~]` en progreso, `[x]` completado.
 - [x] **Probado de extremo a extremo con un envío real**: el usuario dio la contraseña real del buzón, guardada en `user-secrets` (`Smtp:Host/Port/Username/Password/FromAddress/FromName`, puerto 465 SSL vía `SecureSocketOptions.Auto` de MailKit). Se disparó `POST /api/auth/forgotPassword` contra una cuenta real (`admin@codemore.com.mx`, ya existente en la base de desarrollo) — `200 OK`, sin ninguna excepción en el log del servidor. Pendiente que el usuario confirme haber recibido el correo en su bandeja real (no se puede verificar la bandeja desde esta sesión).
 - [ ] **Fuera de alcance de este sprint, sigue pendiente**: el Client todavía no tiene pantalla de "¿Olvidaste tu contraseña?" (ni para pedir el correo ni para capturar el código/nueva contraseña) — con esto solo se conectó el envío, los endpoints de Identity ya funcionan mejor pero la UI para usarlos no existe.
 
+## Sprint 33 — Ajustes reportados probando registro/login reales en producción ✅ (2026-09-10)
+- [x] **Bloqueo de zoom táctil**: `maximum-scale=1.0, user-scalable=no` en el meta viewport + `touch-action: pan-x pan-y` en `html,body` — bug real reportado por el usuario: al pellizcar para hacer zoom, o incluso solo al enfocar/cerrar el teclado táctil, la app perdía su encuadre fijo y quedaba con scroll libre en las cuatro direcciones. Documentado en [SPEC-005](docs/specs/SPEC_TarjetasCredito-005-UI.md) "Bloqueo de zoom táctil" (incluye el trade-off de accesibilidad asumido a propósito).
+- [x] **Registro sin confirmar: el formulario ya no se queda "en nada"** — `Register.razor` intentaba iniciar sesión automáticamente tras registrar; en producción eso siempre falla (correo sin confirmar todavía) y antes no avisaba nada. Ahora muestra un toast claro y navega a `/login`. Documentado en [SPEC-004](docs/specs/SPEC_TarjetasCredito-004-Seguridad.md).
+- [x] Placeholders de "Nombre(s)"/"Apellidos" en Configuración ya no muestran un nombre de ejemplo real (`Mario`/`Díaz`) — genéricos ahora.
+- [x] Aclarado con el usuario: si nunca confirma su correo, en producción no puede iniciar sesión (mensaje genérico, misma decisión de seguridad del Sprint 29 de no revelar la causa exacta); en desarrollo no aplica.
+- [x] **Decidido con el usuario**: por ahora, borrar cuentas de prueba se sigue pidiendo directamente en el chat (sin código nuevo) — mismo patrón usado toda la sesión. Un panel de administrador real queda registrado como Sprint futuro (ver abajo), no se implementa todavía.
+- [ ] Pendiente que el usuario confirme en su celular real (bloqueo de zoom táctil no se puede verificar con el navegador de automatización de esta sesión — misma limitación de siempre).
+
+## Sprint 34 — Panel de administrador (superadmin) — futuro, sin empezar
+**Decidido con el usuario (2026-09-10)**: un solo rol de administrador (`SuperAdmin` o similar), pensado para que exista **un único usuario** con ese rol en todo el sistema — no un sistema general de "administradores" ni autoservicio de asignar el rol. Sin diseñar todavía; antes de implementar, definir con el usuario:
+- [ ] Cómo se asigna el rol la primera vez (¿seed manual en base de datos? ¿variable de entorno con el correo del superadmin? — nunca un endpoint público que permita auto-asignarse el rol).
+- [ ] Qué puede hacer el panel: como mínimo, listar y eliminar usuarios (el caso de uso que originó el pedido — poder reusar un correo en pruebas). Confirmar si necesita algo más (ver actividad, resetear contraseñas de otros, etc.) o si se mantiene acotado a esto.
+- [ ] Cómo se protege la ruta/endpoints (`[Authorize(Roles = "SuperAdmin")]` de ASP.NET Core Identity ya soporta esto de fábrica una vez que exista el rol).
+- [ ] Si el panel vive en el mismo Client (Blazor) con una ruta oculta, o si conviene mantenerlo completamente aparte.
+
 ## Backlog futuro (sin sprint asignado)
 - [ ] Integración real con proveedor de buró de crédito (requiere credenciales del usuario).
 - [ ] Explicaciones de recomendación generadas por Claude API sobre el motor de reglas (híbrido).

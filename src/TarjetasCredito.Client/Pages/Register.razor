@@ -53,12 +53,17 @@
                 Navigation.NavigateTo("/", replace: true);
                 return;
             }
-        }
-        else
-        {
-            await Dialogs.ToastErrorAsync(string.Join(" ", resultado.Errores));
+
+            // No se pudo iniciar sesión automáticamente — no es un error, es el flujo esperado cuando
+            // se exige confirmar el correo (RequireConfirmedEmail en producción, ver SPEC-004). Antes
+            // esto dejaba el formulario de registro sin ningún aviso (bug real reportado por el
+            // usuario: "mandé el correo pero la app se quedó en nada").
+            await Dialogs.ToastExitoAsync("Cuenta creada. Revisa tu correo para confirmarla y después inicia sesión.");
+            Navigation.NavigateTo("/login", replace: true);
+            return;
         }
 
+        await Dialogs.ToastErrorAsync(string.Join(" ", resultado.Errores));
         enviando = false;
     }
 
