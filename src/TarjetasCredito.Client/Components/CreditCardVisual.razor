@@ -1,0 +1,47 @@
+@using TarjetasCredito.Shared.Dtos
+
+<div class="credit-card-visual" style="background: linear-gradient(135deg, @Tarjeta.ColorHex, @ColorUtils.Oscurecer(Tarjeta.ColorHex));">
+    @if (MostrarAcciones)
+    {
+        <div class="credit-card-visual-actions">
+            @if (PermitirEditar)
+            {
+                <button type="button" class="credit-card-visual-action" title="Editar @Tarjeta.Nombre" @onclick="OnEditar" @onclick:stopPropagation="true">
+                    ✎
+                </button>
+            }
+            @if (PermitirEliminar)
+            {
+                <button type="button" class="credit-card-visual-action credit-card-visual-action-danger" title="Dar de baja @Tarjeta.Nombre" @onclick="OnEliminar" @onclick:stopPropagation="true">
+                    🗑
+                </button>
+            }
+        </div>
+    }
+
+    <div class="credit-card-visual-header @(MostrarAcciones ? "con-acciones" : "")">
+        <div class="banco">@Tarjeta.Banco</div>
+        <div class="credit-card-visual-header-right">
+            <MarcaBadge Marca="Tarjeta.Marca" />
+            <div class="credit-card-visual-datos">
+                <span>Límite $@Tarjeta.LimiteCredito.ToString("N0")</span>
+                <span>Corte día @Tarjeta.DiaCorte</span>
+            </div>
+        </div>
+    </div>
+    <div class="alias">@Tarjeta.Nombre</div>
+    <div class="digitos">•••• •••• •••• @Tarjeta.UltimosCuatroDigitos</div>
+    <div class="meta">
+        <span>Utilización @Tarjeta.UtilizacionActual.ToString("P0")</span>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CreditCardDto Tarjeta { get; set; } = null!;
+    [Parameter] public bool PermitirEliminar { get; set; }
+    [Parameter] public bool PermitirEditar { get; set; }
+    [Parameter] public EventCallback OnEliminar { get; set; }
+    [Parameter] public EventCallback OnEditar { get; set; }
+
+    private bool MostrarAcciones => PermitirEditar || PermitirEliminar;
+}

@@ -1,0 +1,16 @@
+@* Placeholder de carga reusable (Sprint 9, ver SPEC-005): reemplaza el "Cargando..." plano por
+   filas con la silueta aproximada del contenido real y un barrido sutil de brillo. *@
+@for (var i = 0; i < Cantidad; i++)
+{
+    <div class="card skeleton-card">
+        <div class="skeleton skeleton-circle"></div>
+        <div class="skeleton-lines">
+            <div class="skeleton skeleton-line" style="width:65%;"></div>
+            <div class="skeleton skeleton-line" style="width:40%;"></div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Cantidad { get; set; } = 3;
+}

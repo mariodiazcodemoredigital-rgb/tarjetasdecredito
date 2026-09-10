@@ -1,0 +1,849 @@
+/* Diseño base — ver docs/specs/SPEC_TarjetasCredito-005-UI.md */
+
+:root {
+    --bg: #F7F8FA;
+    --surface: #FFFFFF;
+    --surface-2: #F0F2F6;
+    --text: #12151C;
+    --text-muted: #5B6270;
+    --border: #E4E7EC;
+    --primary: #3B5BFE;
+    --primary-contrast: #FFFFFF;
+    --success: #1FAE6B;
+    --danger: #E0562B;
+    --radius-lg: 20px;
+    --radius-md: 14px;
+    --radius-sm: 10px;
+    --shadow: 0 8px 24px rgba(18, 21, 28, 0.06);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root[data-theme="dark"] {
+    --bg: #0B0D12;
+    --surface: #161922;
+    --surface-2: #1E222D;
+    --text: #F2F4F8;
+    --text-muted: #9AA2B1;
+    --border: #262B36;
+    --primary: #6C87FF;
+    --primary-contrast: #0B0D12;
+    --success: #33D68A;
+    --danger: #FF7A4D;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root[data-theme="system"] {
+        --bg: #0B0D12;
+        --surface: #161922;
+        --surface-2: #1E222D;
+        --text: #F2F4F8;
+        --text-muted: #9AA2B1;
+        --border: #262B36;
+        --primary: #6C87FF;
+        --primary-contrast: #0B0D12;
+        --success: #33D68A;
+        --danger: #FF7A4D;
+        --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { margin: 0 0 0.4em 0; font-weight: 700; letter-spacing: -0.01em; font-family: 'Sora', var(--font); }
+
+/* Blazor enfoca el primer <h1> de la página en cada navegación (App.razor → <FocusOnNavigate Selector="h1" />,
+   accesibilidad: le avisa a lectores de pantalla dónde empieza el contenido nuevo). Eso es correcto y no se
+   debe quitar, pero visualmente deja el contorno de foco del navegador pegado al h1 después de cada carga —
+   se ve como si quedara "marcado"/seleccionado. El h1 no es un tab-stop normal (tabindex="-1"), así que un
+   usuario de teclado nunca llega ahí tabulando — quitar el contorno aquí no afecta la accesibilidad real. */
+h1:focus { outline: none; }
+p { margin: 0 0 0.6em 0; color: var(--text-muted); }
+a { color: var(--primary); text-decoration: none; }
+
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.app-content {
+    flex: 1;
+    padding: 1.25rem 1rem 6rem 1rem;
+    max-width: 720px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Navegación "wave" (pill elástica) — ver SPEC-005, patrón reutilizable "navegación wave".
+   JS (navWave.js) solo escribe --wave-x/--wave-w (horizontal) o --wave-y/--wave-h (vertical);
+   la transición con rebote vive acá, nunca en JS. */
+.nav-wave-pill {
+    position: absolute;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, var(--primary), #7C5CFF);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 45%, transparent);
+    transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 0;
+    pointer-events: none;
+}
+.wave-sin-movimiento .nav-wave-pill { transition: none; }
+
+/* Barra inferior (móvil) */
+.bottom-nav {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    display: flex;
+    justify-content: space-around;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 0.5rem 0 calc(0.5rem + env(safe-area-inset-bottom));
+    z-index: 20;
+}
+
+.bottom-nav .nav-wave-pill {
+    top: 6px; bottom: 6px; left: 0;
+    transform: translateX(var(--wave-x, 0px));
+    width: var(--wave-w, 0px);
+}
+
+.bottom-nav a {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-sm);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+}
+
+.bottom-nav a.active { color: var(--primary); }
+
+.bottom-nav a.wave-activo {
+    color: var(--primary-contrast);
+    transform: translateY(-3px);
+}
+
+.bottom-nav .icon { font-size: 1.25rem; }
+
+/* Barra lateral (desktop) */
+.side-nav {
+    display: none;
+}
+
+@media (min-width: 992px) {
+    .bottom-nav { display: none; }
+
+    .side-nav {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: 240px;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        padding: 1.5rem 1rem;
+        gap: 0.25rem;
+    }
+
+    .side-nav .nav-wave-pill {
+        left: 0.5rem; right: 0.5rem; top: 0;
+        transform: translateY(var(--wave-y, 0px));
+        height: var(--wave-h, 0px);
+    }
+
+    .side-nav .brand {
+        font-weight: 800;
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+        padding: 0 0.6rem;
+    }
+
+    .side-nav a {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: var(--text-muted);
+        padding: 0.65rem 0.75rem;
+        border-radius: var(--radius-sm);
+        font-weight: 500;
+        transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+    }
+
+    .side-nav a.active { color: var(--primary); }
+
+    .side-nav a.wave-activo {
+        color: var(--primary-contrast);
+        transform: translateX(3px);
+    }
+
+    .side-nav-spacer { flex: 1; }
+
+    .side-nav-user {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        padding: 0.6rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+    }
+
+    .side-nav-user-row {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-width: 0;
+    }
+
+    .side-nav-user-logout {
+        padding: 0.45rem 0.6rem;
+        font-size: 0.8rem;
+    }
+
+    .side-nav-user-avatar {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: var(--primary-contrast);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+    }
+
+    .side-nav-user-name {
+        min-width: 0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .app-content {
+        max-width: 900px;
+        padding: 2rem 2.5rem;
+    }
+}
+
+/* Componentes */
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+/* Elevación premium — ver SPEC-005 "Elevación premium de pantallas internas". Solo para tarjetas que
+   representan un ítem de una lista (compra, factor de buró, recordatorio), no para formularios/contenedores. */
+.card-interactive {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-interactive:hover, .card-interactive:focus-within {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 30px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+/* Badge de ícono junto al <h1> de cada página, mismo degradado que la pill del nav y las tarjetas. */
+.page-header { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.4em; }
+.page-header h1 { margin: 0; }
+.page-icon-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: var(--radius-md);
+    background: linear-gradient(135deg, var(--primary), #7C5CFF);
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+/* Animación de entrada sutil para las tarjetas principales al cargar la página. */
+@keyframes entrar {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+.entrada-suave { animation: entrar 0.4s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+    .entrada-suave { animation: none; }
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    background: linear-gradient(135deg, var(--primary), #7C5CFF);
+    color: var(--primary-contrast);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 0.7rem 1.1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+/* Feedback táctil al presionar cualquier botón (micro-interacción, Sprint 9). */
+.btn:active:not(:disabled) { transform: scale(0.97); }
+
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-secondary { background: var(--surface-2); color: var(--text); }
+.btn-danger { background: var(--danger); color: #fff; }
+
+.field { margin-bottom: 1rem; }
+.field label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-muted); }
+
+.field input, .field select, .field textarea {
+    width: 100%;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 0.95rem;
+    font-family: var(--font);
+}
+
+.field input:focus, .field select:focus, .field textarea:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+}
+
+.auth-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 380px;
+}
+
+@media (min-width: 992px) {
+    .auth-shell {
+        background: linear-gradient(135deg, var(--primary), #7C5CFF);
+    }
+
+    .auth-card {
+        background: var(--surface);
+        padding: 2.5rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+    }
+}
+
+/* ============================================================
+   Patrón reutilizable: "parallax stage" (elementos que reaccionan al cursor)
+   Motor JS: wwwroot/js/parallaxStage.js — guía de uso completa en
+   docs/specs/SPEC_TarjetasCredito-005-UI.md.
+   Uso: contenedor con clase "parallax-stage" + hijos con clase "parallax-item".
+   Cada item puede definir su posición/rotación base vía --base-x/--base-y/--base-r
+   (si no las define, quedan en 0). El JS solo escribe --px/--py/--pr (el "empujón"
+   del cursor) — así el efecto se SUMA a la base en vez de reemplazarla.
+   ============================================================ */
+.parallax-item {
+    --base-x: 0px;
+    --base-y: 0px;
+    --base-r: 0deg;
+    --px: 0px;
+    --py: 0px;
+    --pr: 0deg;
+    transform: translate(calc(var(--base-x) + var(--px)), calc(var(--base-y) + var(--py))) rotate(calc(var(--base-r) + var(--pr)));
+    transition: transform 0.15s ease-out;
+    will-change: transform;
+}
+
+/* Login — sección única (encabezado > animación > formulario), sin scroll — ver SPEC-005.
+   position:fixed + inset:0 saca la sección del flujo normal del layout a propósito: MainLayout envuelve
+   todas las rutas (incluida /login) en .app-content, que trae padding pensado para páginas autenticadas
+   (espacio reservado para el nav inferior fijo). Sin esto, ese padding sumaba altura y forzaba scroll. */
+.login-shell {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: clamp(0.75rem, 3vh, 1.75rem) 1.25rem 0.75rem;
+    background:
+        radial-gradient(circle at 18% 12%, rgba(124, 92, 255, 0.55) 0%, transparent 55%),
+        radial-gradient(circle at 85% 30%, rgba(59, 91, 254, 0.5) 0%, transparent 55%),
+        linear-gradient(160deg, #12153A 0%, #0B0D12 100%);
+}
+
+.login-section {
+    width: 100%;
+    max-width: 380px;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(0.75rem, 2.8vh, 1.4rem);
+}
+
+/* El "carril" de las tarjetas: alto suficiente para que el recorrido completo del parallax
+   (base + empujón del cursor) quepa con margen real antes de tocar el encabezado o el
+   formulario — el overflow:hidden queda solo como red de seguridad, no como recurso normal. */
+.login-visual-stage {
+    position: relative;
+    width: 100%;
+    height: clamp(140px, 19vh, 175px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    /* En touch, sin esto el navegador se toma un momento para decidir si el arrastre es un gesto de
+       scroll/zoom antes de entregarle los eventos a JS — se siente con retraso/entrecortado (reportado
+       2026-09-09). touch-action:none le dice al navegador "este gesto es mío" desde el primer toque. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.login-card-float {
+    position: absolute;
+    width: 128px;
+    height: 80px;
+    border-radius: 12px;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+}
+
+.login-card-float-1 {
+    background: linear-gradient(135deg, #3B5BFE, #12153A);
+    --base-x: -42px; --base-y: -12px; --base-r: -14deg;
+    z-index: 1;
+}
+
+.login-card-float-2 {
+    background: linear-gradient(135deg, #7C5CFF, #3B5BFE);
+    --base-x: 30px; --base-y: 0px; --base-r: 6deg;
+    z-index: 2;
+}
+
+.login-card-float-3 {
+    background: linear-gradient(135deg, #1FAE6B, #0EA5C4);
+    --base-x: -8px; --base-y: 12px; --base-r: -3deg;
+    z-index: 3;
+    padding: 0.7rem;
+}
+
+.login-card-chip { width: 20px; height: 14px; border-radius: 4px; background: rgba(255, 255, 255, 0.85); margin-bottom: 0.4rem; }
+.login-card-lines { display: flex; flex-direction: column; gap: 0.24rem; }
+.login-card-lines span { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.5); }
+.login-card-lines span:first-child { width: 70%; }
+.login-card-lines span:last-child { width: 45%; }
+
+.login-visual-copy {
+    position: relative;
+    z-index: 4;
+    color: #fff;
+    text-align: center;
+    flex-shrink: 0;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.login-visual-copy .tag {
+    display: inline-flex;
+    padding: 0.22rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.55rem;
+}
+
+/* Oculta el texto y la píldora visualmente pero conserva su alto — el encabezado de abajo
+   no debe recorrerse hacia arriba al quitar este texto (pedido explícito 2026-09-09). */
+.login-visual-copy .tag-oculto {
+    visibility: hidden;
+}
+
+.login-visual-copy h2 {
+    font-family: 'Sora', var(--font);
+    font-weight: 800;
+    font-size: clamp(1.3rem, 3.6vh, 1.65rem);
+    line-height: 1.15;
+    margin: 0 0 0.3rem;
+    letter-spacing: -0.01em;
+}
+
+.login-visual-copy p { color: rgba(255, 255, 255, 0.68); max-width: 32ch; margin: 0 auto; font-size: 0.78rem; }
+
+/* Tarjeta "glass" — combina con el fondo oscuro en vez de un card blanco genérico */
+.login-form-card {
+    width: 100%;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 1.15rem 1.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+}
+
+.login-form-card h1 {
+    font-family: 'Sora', var(--font);
+    color: #fff;
+    font-size: 1.2rem;
+    margin-bottom: 0.2rem;
+}
+
+.login-form-card > p {
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 0.78rem;
+    margin-bottom: 0.75rem;
+}
+
+.login-form-card .field { margin-bottom: 0.6rem; }
+
+.login-form-card .field label {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.74rem;
+}
+
+.login-form-card .field input {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 0.48rem 0.7rem;
+}
+
+.login-form-card .field input::placeholder { color: rgba(255, 255, 255, 0.35); }
+.login-form-card .field input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+/* Botón secundario (ej. "Entrar con Face ID") sobre el fondo oscuro fijo del login — .btn-secondary
+   normal usa tokens de tema claro/oscuro (--surface-2/--text) que no calzan aquí, mismo criterio
+   "glass" que ya se usa en los inputs de arriba. Ver SPEC-005 "Login: sección única...". */
+.login-form-card .btn-secondary {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    margin-top: 0.6rem;
+}
+.login-form-card .btn-secondary:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+
+.login-form-footer {
+    margin: 0.6rem 0 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.8rem;
+}
+
+.login-form-footer a { color: #fff; font-weight: 600; }
+
+.credit-card-visual {
+    position: relative;
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.4rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--primary), #7C5CFF);
+    box-shadow: var(--shadow);
+    margin-bottom: 1rem;
+    z-index: 1;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.credit-card-visual-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.credit-card-visual-header.con-acciones { padding-right: 4.4rem; }
+.credit-card-visual .banco { font-size: 0.8rem; opacity: 0.85; }
+.credit-card-visual .alias { font-size: 1.1rem; font-weight: 700; margin: 0.4rem 0 1rem; }
+.credit-card-visual .digitos { letter-spacing: 0.15em; font-size: 1rem; }
+.credit-card-visual .meta { display: flex; justify-content: flex-end; margin-top: 1rem; font-size: 0.78rem; opacity: 0.9; }
+
+.credit-card-visual-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.3rem; }
+.credit-card-visual-datos { display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; font-size: 0.68rem; opacity: 0.85; line-height: 1.3; white-space: nowrap; }
+
+.credit-card-visual-actions {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.9rem;
+    display: flex;
+    gap: 0.4rem;
+    z-index: 2;
+}
+
+.credit-card-visual-action {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.22);
+    color: #fff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+}
+
+.credit-card-visual-action:hover { opacity: 1; background: rgba(0, 0, 0, 0.38); }
+.credit-card-visual-action-danger:hover { background: var(--danger); }
+
+/* Marca (glifos propios, sin logos oficiales — ver SPEC-005) */
+.marca-badge { display: inline-flex; align-items: center; }
+.marca-visa { font-style: italic; font-weight: 800; letter-spacing: 0.04em; font-size: 0.95rem; }
+.marca-amex {
+    font-weight: 700; font-size: 0.68rem; letter-spacing: 0.05em;
+    background: rgba(255, 255, 255, 0.25); padding: 0.2rem 0.4rem; border-radius: 4px;
+}
+.marca-otra { font-size: 1.1rem; opacity: 0.9; }
+.marca-mastercard { position: relative; width: 34px; height: 20px; }
+.marca-mastercard .circulo { position: absolute; top: 0; width: 20px; height: 20px; border-radius: 50%; opacity: 0.9; }
+.marca-mastercard .circulo-1 { left: 0; background: #F2A93B; }
+.marca-mastercard .circulo-2 { left: 14px; background: #E0562B; mix-blend-mode: multiply; }
+
+/* Pila de tarjetas ("stack") — ver SPEC-005 */
+.tarjetas-stack .credit-card-visual { margin-top: -54px; }
+.tarjetas-stack .credit-card-visual:first-child { margin-top: 0; }
+
+.tarjetas-stack .credit-card-visual:hover,
+.tarjetas-stack .credit-card-visual:focus-within {
+    transform: translateY(-16px);
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.28);
+    z-index: 30;
+}
+
+.badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.badge-success { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.badge-danger { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.badge-alerta { background: color-mix(in srgb, #F2A93B 20%, transparent); color: #B9791F; }
+
+/* Recordatorios de pago — ver SPEC-003 */
+.recordatorio-item { display: flex; flex-direction: column; gap: 0.5rem; }
+.recordatorio-header { display: flex; align-items: center; gap: 0.5rem; }
+.recordatorio-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.recordatorio-fechas { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.88rem; }
+.recordatorio-pagado { opacity: 0.75; }
+
+/* Historial de compras — ver SPEC-005 "Elevación premium de pantallas internas" */
+.compra-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.compra-item-monto { font-weight: 700; white-space: nowrap; }
+
+/* Buró de crédito — ver SPEC-005 */
+.buro-score-card { position: relative; text-align: center; overflow: hidden; }
+.buro-score-card::before {
+    content: '';
+    position: absolute;
+    top: -40%; left: 50%;
+    transform: translateX(-50%);
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, color-mix(in srgb, var(--primary) 35%, transparent) 0%, transparent 70%);
+    filter: blur(4px);
+    pointer-events: none;
+}
+.buro-score-card .buro-score-numero {
+    position: relative;
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+.buro-factor { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+
+/* Selector de tema (Configuración) — control segmentado */
+.tema-selector {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    background: var(--surface-2);
+    border-radius: var(--radius-md);
+    padding: 0.35rem;
+}
+.tema-selector .btn, .tema-selector .btn-secondary { width: auto; }
+.tema-selector .btn-secondary { background: transparent; box-shadow: none; }
+
+.input-currency { position: relative; }
+.input-currency input { padding-left: 1.75rem; }
+.input-currency-prefix {
+    position: absolute;
+    left: 0.8rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    pointer-events: none;
+}
+
+.tarjeta-form-preview { margin: 0.75rem 0 1.25rem; }
+.tarjeta-form-preview .credit-card-visual { margin-bottom: 0; }
+
+.color-swatches { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-bottom: 0.4rem; }
+
+.color-swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    padding: 0;
+    position: relative;
+}
+
+.color-swatch.seleccionado { border-color: var(--text); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary); }
+.color-swatch-auto, .color-swatch-custom { background: var(--surface-2); }
+.color-swatch-custom input[type="color"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* Ver SPEC-001 "Manejo de errores de red y estados sin conexión" */
+.estado-sin-conexion { text-align: center; padding: 2rem 1.25rem; }
+.estado-sin-conexion-icono { font-size: 2.2rem; margin-bottom: 0.5rem; }
+.estado-sin-conexion p { margin: 0 auto 1rem; max-width: 26rem; }
+.estado-sin-conexion .btn { margin: 0 auto; }
+
+/* Estado vacío reusable (Sprint 9): icono + título + descripción + CTA opcional, mismo esqueleto visual
+   que .estado-sin-conexion pero para "no hay datos todavía" en vez de "falló la conexión". */
+.estado-vacio { text-align: center; padding: 2.5rem 1.25rem; }
+.estado-vacio-icono { font-size: 2.6rem; margin-bottom: 0.6rem; }
+.estado-vacio h3 { margin-bottom: 0.3rem; }
+.estado-vacio p { margin: 0 auto 1rem; max-width: 26rem; }
+.estado-vacio .btn { width: auto; margin: 0 auto; }
+
+/* Skeleton de carga reusable (Sprint 9): reemplaza el "Cargando..." plano por placeholders con la
+   silueta aproximada del contenido real, con un barrido sutil de brillo. */
+.skeleton-card { display: flex; align-items: center; gap: 0.9rem; }
+.skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+.skeleton {
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+    border-radius: var(--radius-sm);
+}
+.skeleton-circle { width: 2.4rem; height: 2.4rem; border-radius: 50%; flex-shrink: 0; }
+.skeleton-line { height: 0.85rem; }
+@keyframes skeleton-shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .skeleton { animation: none; background: var(--surface-2); }
+}
+
+.text-muted { color: var(--text-muted); font-size: 0.85rem; }
+.alert { padding: 0.75rem 1rem; border-radius: var(--radius-sm); font-size: 0.88rem; margin-bottom: 1rem; }
+.alert-danger { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.alert-info { background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); }
+
+.valid.modified:not([type=checkbox]) { outline: 1px solid var(--success); }
+.invalid { outline: 1px solid var(--danger); }
+.validation-message { color: var(--danger); font-size: 0.8rem; }
+
+#blazor-error-ui {
+    background: var(--surface);
+    color: var(--text);
+    border-top: 1px solid var(--border);
+    bottom: 0; left: 0; width: 100%;
+    box-sizing: border-box;
+    display: none;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss { cursor: pointer; position: absolute; right: 0.75rem; top: 0.5rem; }
+
+.blazor-error-boundary {
+    background: var(--danger);
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    color: white;
+}
+
+.blazor-error-boundary::after { content: "Ocurrió un error."; }
+
+.loading-progress {
+    position: absolute;
+    display: block;
+    width: 6rem;
+    height: 6rem;
+    inset: 40vh 0 auto 0;
+    margin: 0 auto;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 0.6rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: var(--primary);
+    stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+    transition: stroke-dasharray 0.05s ease-in-out;
+}
+
+.loading-progress-text {
+    position: absolute;
+    text-align: center;
+    font-weight: bold;
+    inset: calc(40vh + 3.25rem) 0 auto 0;
+}
+
+.loading-progress-text:after { content: var(--blazor-load-percentage-text, "Cargando"); }
+
+/* SweetAlert2 — ver docs/specs/SPEC_TarjetasCredito-005-UI.md */
+.app-swal-popup {
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow) !important;
+    font-family: var(--font) !important;
+}
+
+.app-swal-toast {
+    border-radius: var(--radius-md) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow) !important;
+}
+
+.app-swal-btn {
+    border-radius: var(--radius-sm) !important;
+    padding: 0.6rem 1.2rem !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+}
+
+.app-swal-btn-cancel {
+    color: var(--text) !important;
+}
+
+.app-swal-popup .swal2-actions {
+    gap: 0.75rem !important;
+}

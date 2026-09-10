@@ -1,0 +1,175 @@
+@page "/pagos"
+@attribute [Authorize]
+@using TarjetasCredito.Client.Services
+@using TarjetasCredito.Shared.Dtos
+@inject PaymentReminderApiService RemindersApi
+@inject DialogService Dialogs
+
+<PageTitle>Recordatorios de pago</PageTitle>
+
+<div class="page-header">
+    <span class="page-icon-chip">📅</span>
+    <h1>Recordatorios de pago</h1>
+</div>
+<p>Fecha óptima = paga antes del corte y baja tu utilización reportada. Fecha límite = último día sin generar intereses ni atraso.</p>
+
+@if (cargando)
+{
+    <EstadoCarga Cantidad="3" />
+}
+else if (sinConexion || errorServidor)
+{
+    <EstadoSinConexion SinConexion="sinConexion" OnReintentar="CargarAsync" />
+}
+else if (pendientes.Count == 0 && pagados.Count == 0)
+{
+    <EstadoVacio Icono="📅" Titulo="Aún no hay recordatorios" Descripcion="Registra al menos una tarjeta para que tus recordatorios de pago se generen automáticamente.">
+        <a class="btn" href="tarjetas">Ir a Tarjetas</a>
+    </EstadoVacio>
+}
+else
+{
+    <h3>Pendientes</h3>
+    @if (pendientes.Count == 0)
+    {
+        <p class="text-muted">No tienes pagos pendientes registrados. 🎉</p>
+    }
+    else
+    {
+        @foreach (var r in pendientes)
+        {
+            <div class="card recordatorio-item card-interactive entrada-suave">
+                <div class="recordatorio-header">
+                    <span class="recordatorio-color" style="background:@r.ColorHex;"></span>
+                    <strong>@r.NombreTarjeta</strong>
+                    <span class="badge @UrgenciaClase(r.Urgencia)">@UrgenciaTexto(r)</span>
+                </div>
+                <div class="recordatorio-fechas">
+                    <span>Fecha límite: <strong>@r.FechaLimitePago.ToString("dd/MM/yyyy")</strong></span>
+                    <span class="text-muted">Fecha óptima de pago: @r.FechaOptimaPago.ToString("dd/MM/yyyy")</span>
+                </div>
+
+                <div class="field">
+                    <label>Monto del estado de cuenta (opcional)</label>
+                    <div class="input-currency">
+                        <span class="input-currency-prefix">$</span>
+                        <input type="number" min="0" step="0.01" value="@montoPorId.GetValueOrDefault(r.Id)"
+                               @onchange="@(e => montoPorId[r.Id] = ParseMonto(e.Value?.ToString()))" />
+                    </div>
+                </div>
+
+                <button class="btn" style="width:auto;" @onclick="() => MarcarPagadoAsync(r)">Marcar como pagado</button>
+            </div>
+        }
+    }
+
+    @if (pagados.Count > 0)
+    {
+        <h3 style="margin-top:1.75rem;">Historial de pagos</h3>
+        @foreach (var r in pagados)
+        {
+            <div class="card recordatorio-item recordatorio-pagado card-interactive entrada-suave">
+                <div class="recordatorio-header">
+                    <span class="recordatorio-color" style="background:@r.ColorHex;"></span>
+                    <strong>@r.NombreTarjeta</strong>
+                    <span class="badge badge-success">Pagado</span>
+                </div>
+                <div class="recordatorio-fechas">
+                    <span class="text-muted">Ciclo hasta @r.CicloFin.ToString("dd/MM/yyyy") · Pagado el @r.FechaPago?.ToString("dd/MM/yyyy")</span>
+                    @if (r.MontoEstadoCuenta.HasValue)
+                    {
+                        <span class="text-muted">$@r.MontoEstadoCuenta.Value.ToString("N2")</span>
+                    }
+                </div>
+            </div>
+        }
+    }
+}
+
+@code {
+    private List<PaymentReminderDto> pendientes = [];
+    private List<PaymentReminderDto> pagados = [];
+    private readonly Dictionary<Guid, decimal?> montoPorId = new();
+    private bool cargando = true;
+    private bool sinConexion;
+    private bool errorServidor;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        sinConexion = false;
+        errorServidor = false;
+
+        var resultado = await RemindersApi.ObtenerTodosAsync();
+        if (resultado.Exitoso)
+        {
+            var todos = resultado.Datos!;
+            pendientes = todos.Where(r => !r.Pagado).OrderBy(r => r.DiasHastaLimite).ToList();
+            pagados = todos.Where(r => r.Pagado).OrderByDescending(r => r.FechaPago).ToList();
+
+            foreach (var r in pendientes)
+            {
+                montoPorId[r.Id] = r.MontoEstadoCuenta;
+            }
+        }
+        else
+        {
+            sinConexion = resultado.SinConexion;
+            errorServidor = resultado.ErrorServidor;
+        }
+
+        cargando = false;
+    }
+
+    private static decimal? ParseMonto(string? valor)
+        => decimal.TryParse(valor, out var monto) ? monto : null;
+
+    private async Task MarcarPagadoAsync(PaymentReminderDto r)
+    {
+        var confirmado = await Dialogs.ConfirmarAsync(
+            $"¿Marcar como pagado \"{r.NombreTarjeta}\"?",
+            $"Se registrará como pagado el ciclo con fecha límite {r.FechaLimitePago:dd/MM/yyyy}.",
+            "Marcar como pagado");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await RemindersApi.MarcarPagadoAsync(r.Id, montoPorId.GetValueOrDefault(r.Id));
+            if (response.IsSuccessStatusCode)
+            {
+                await CargarAsync();
+                await Dialogs.ToastExitoAsync("Pago registrado.");
+            }
+            else
+            {
+                await Dialogs.ToastErrorAsync("No se pudo registrar el pago. Intenta de nuevo.");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+    }
+
+    private static string UrgenciaClase(UrgenciaPagoDto urgencia) => urgencia switch
+    {
+        UrgenciaPagoDto.Vencido => "badge-danger",
+        UrgenciaPagoDto.Inminente => "badge-danger",
+        UrgenciaPagoDto.Proximo => "badge-alerta",
+        _ => ""
+    };
+
+    private static string UrgenciaTexto(PaymentReminderDto r) => r.DiasHastaLimite switch
+    {
+        < 0 => $"Vencido hace {-r.DiasHastaLimite} día(s)",
+        0 => "Vence hoy",
+        1 => "Vence mañana",
+        _ => $"Vence en {r.DiasHastaLimite} días"
+    };
+}

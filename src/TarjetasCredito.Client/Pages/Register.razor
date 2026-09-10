@@ -1,0 +1,70 @@
+@page "/register"
+@using TarjetasCredito.Client.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject DialogService Dialogs
+
+<PageTitle>Crear cuenta</PageTitle>
+
+<AuthShell HeadlineLinea1="Empieza a" HeadlineLinea2="controlar tus tarjetas."
+           Subtitulo="Crea tu cuenta y decide tú mismo qué tarjetas registrar.">
+    <h1>Crea tu cuenta</h1>
+    <p>Regístrate con tu correo. Cada cuenta administra únicamente las tarjetas que tú mismo registres.</p>
+
+    <EditForm Model="modelo" OnValidSubmit="EnviarAsync" autocomplete="off">
+        <DataAnnotationsValidator />
+
+        <div class="field">
+            <label>Correo electrónico</label>
+            <InputText @bind-Value="modelo.Email" type="email" placeholder="tucorreo@ejemplo.com"
+                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')" />
+        </div>
+
+        <div class="field">
+            <label>Contraseña</label>
+            <InputText @bind-Value="modelo.Password" type="password" placeholder="Mínimo 8 caracteres"
+                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')" />
+        </div>
+
+        <button class="btn" type="submit" disabled="@enviando">
+            @(enviando ? "Creando..." : "Crear cuenta")
+        </button>
+    </EditForm>
+
+    <p class="login-form-footer">
+        ¿Ya tienes cuenta? <a href="/login">Inicia sesión</a>
+    </p>
+</AuthShell>
+
+@code {
+    private readonly RegisterModel modelo = new();
+    private bool enviando;
+
+    private async Task EnviarAsync()
+    {
+        enviando = true;
+
+        var resultado = await AuthService.RegistrarAsync(modelo.Email, modelo.Password);
+        if (resultado.Exitoso)
+        {
+            var login = await AuthService.IniciarSesionAsync(modelo.Email, modelo.Password);
+            if (login.Exitoso)
+            {
+                Navigation.NavigateTo("/", replace: true);
+                return;
+            }
+        }
+        else
+        {
+            await Dialogs.ToastErrorAsync(string.Join(" ", resultado.Errores));
+        }
+
+        enviando = false;
+    }
+
+    private class RegisterModel
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+}

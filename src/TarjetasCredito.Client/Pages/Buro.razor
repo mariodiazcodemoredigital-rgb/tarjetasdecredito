@@ -1,0 +1,85 @@
+@page "/buro"
+@attribute [Authorize]
+@using TarjetasCredito.Client.Services
+@using TarjetasCredito.Shared.Dtos
+@inject BuroApiService BuroApi
+
+<PageTitle>Buró de crédito</PageTitle>
+
+<div class="page-header">
+    <span class="page-icon-chip">📊</span>
+    <h1>Buró de crédito</h1>
+</div>
+
+@if (cargando)
+{
+    <EstadoCarga Cantidad="3" />
+}
+else if (sinConexion || errorServidor)
+{
+    <EstadoSinConexion SinConexion="sinConexion" OnReintentar="CargarAsync" />
+}
+else if (score is not null)
+{
+    @if (score.EsSimulado)
+    {
+        <div class="alert alert-info">
+            Este score es una <strong>estimación simulada</strong> calculada a partir de tus propios datos
+            (utilización y tarjetas registradas), no es una consulta real a un buró de crédito.
+            Ver <code>docs/specs/SPEC_TarjetasCredito-003-ReglasNegocio.md</code>.
+        </div>
+    }
+
+    <div class="card buro-score-card entrada-suave">
+        <div class="text-muted">Score estimado (@score.Proveedor)</div>
+        <div class="buro-score-numero">@score.Score</div>
+    </div>
+
+    <h3>Factores</h3>
+    @foreach (var f in score.Factores)
+    {
+        <div class="card buro-factor card-interactive entrada-suave">
+            <span>@f.Descripcion</span>
+            <span class="badge @(f.Impacto == "Positivo" ? "badge-success" : f.Impacto == "Negativo" ? "badge-danger" : "")">@f.Impacto</span>
+        </div>
+    }
+
+    <h3>Recomendaciones para mejorar tu score</h3>
+    <div class="card">
+        <ul style="margin:0;padding-left:1.2rem;">
+            @foreach (var r in score.Recomendaciones)
+            {
+                <li style="margin-bottom:0.5rem;">@r</li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    private BuroScoreResponse? score;
+    private bool cargando = true;
+    private bool sinConexion;
+    private bool errorServidor;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        sinConexion = false;
+        errorServidor = false;
+
+        var resultado = await BuroApi.ObtenerScoreAsync();
+        if (resultado.Exitoso)
+        {
+            score = resultado.Datos;
+        }
+        else
+        {
+            sinConexion = resultado.SinConexion;
+            errorServidor = resultado.ErrorServidor;
+        }
+
+        cargando = false;
+    }
+}

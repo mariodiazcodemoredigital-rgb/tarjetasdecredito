@@ -1,0 +1,23 @@
+@using TarjetasCredito.Shared.Dtos
+
+@switch (Marca)
+{
+    case MarcaTarjetaDto.Visa:
+        <span class="marca-badge marca-visa">VISA</span>
+        break;
+    case MarcaTarjetaDto.Mastercard:
+        <span class="marca-badge marca-mastercard" aria-label="Mastercard">
+            <span class="circulo circulo-1"></span><span class="circulo circulo-2"></span>
+        </span>
+        break;
+    case MarcaTarjetaDto.AmericanExpress:
+        <span class="marca-badge marca-amex">AMEX</span>
+        break;
+    default:
+        <span class="marca-badge marca-otra">💳</span>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public MarcaTarjetaDto Marca { get; set; }
+}

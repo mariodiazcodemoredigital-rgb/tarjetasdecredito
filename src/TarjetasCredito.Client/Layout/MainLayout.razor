@@ -1,0 +1,91 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject UserProfileService UserProfile
+@inject AuthService AuthService
+@inject IJSRuntime JS
+@using TarjetasCredito.Client.Services
+@implements IDisposable
+
+<div class="app-shell">
+    <AuthorizeView>
+        <Authorized>
+            <nav class="side-nav">
+                <span class="nav-wave-pill"></span>
+                <div class="brand">💳 Mis Tarjetas</div>
+                <NavLink href="" Match="NavLinkMatch.All">🏠 Dashboard</NavLink>
+                <NavLink href="tarjetas">💳 Tarjetas</NavLink>
+                <NavLink href="compras">🧾 Compras</NavLink>
+                <NavLink href="pagos">📅 Pagos</NavLink>
+                <NavLink href="buro">📊 Buró</NavLink>
+                <NavLink href="configuracion">⚙️ Configuración</NavLink>
+
+                <div class="side-nav-spacer"></div>
+
+                <div class="side-nav-user">
+                    <div class="side-nav-user-row">
+                        <div class="side-nav-user-avatar">@UserProfile.Iniciales</div>
+                        <div class="side-nav-user-name" title="@UserProfile.NombreParaMostrar">@UserProfile.NombreParaMostrar</div>
+                    </div>
+                    <button type="button" class="btn btn-danger side-nav-user-logout" @onclick="CerrarSesionAsync">Cerrar sesión</button>
+                </div>
+            </nav>
+        </Authorized>
+    </AuthorizeView>
+
+    <div class="app-content">
+        <ErrorBoundary>
+            @Body
+        </ErrorBoundary>
+    </div>
+
+    <AuthorizeView>
+        <Authorized>
+            <nav class="bottom-nav">
+                <span class="nav-wave-pill"></span>
+                <NavLink href="" Match="NavLinkMatch.All"><span class="icon">🏠</span>Inicio</NavLink>
+                <NavLink href="tarjetas"><span class="icon">💳</span>Tarjetas</NavLink>
+                <NavLink href="compras"><span class="icon">🧾</span>Compras</NavLink>
+                <NavLink href="pagos"><span class="icon">📅</span>Pagos</NavLink>
+                <NavLink href="buro"><span class="icon">📊</span>Buró</NavLink>
+                <NavLink href="configuracion"><span class="icon">⚙️</span>Ajustes</NavLink>
+            </nav>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        UserProfile.CambioPerfil += OnPerfilCambio;
+        if (UserProfile.Perfil is null)
+        {
+            await UserProfile.CargarAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // navWave.init es idempotente (no re-enlaza si el nodo del DOM no cambió), así que es seguro
+        // llamarlo en cada render en vez de solo en el primero: AuthorizeView resuelve el estado de
+        // autenticación de forma asíncrona (el nav puede no existir aún en el primer render), y además
+        // Blazor puede reemplazar el <nav> completo más adelante (ej. al terminar de cargar el perfil)
+        // — en ambos casos, llamar siempre asegura que quede enlazado al nodo vigente.
+        await JS.InvokeVoidAsync("navWave.init", ".side-nav", "a", "vertical");
+        await JS.InvokeVoidAsync("navWave.init", ".bottom-nav", "a", "horizontal");
+    }
+
+    private async Task CerrarSesionAsync()
+    {
+        await AuthService.CerrarSesionAsync();
+        Navigation.NavigateTo("/login", replace: true);
+    }
+
+    private void OnPerfilCambio() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        UserProfile.CambioPerfil -= OnPerfilCambio;
+        _ = JS.InvokeVoidAsync("navWave.detener", ".side-nav");
+        _ = JS.InvokeVoidAsync("navWave.detener", ".bottom-nav");
+    }
+}

@@ -1,0 +1,42 @@
+@inject IJSRuntime JS
+
+<div class="login-shell">
+    <div class="login-section">
+        <div class="login-visual-copy">
+            <span class="tag tag-oculto" aria-hidden="true">tarjetas de crédito</span>
+            <h2>@HeadlineLinea1<br />@HeadlineLinea2</h2>
+            <p>@Subtitulo</p>
+        </div>
+
+        <div class="login-visual-stage parallax-stage">
+            <div class="login-card-float parallax-item login-card-float-1"></div>
+            <div class="login-card-float parallax-item login-card-float-2"></div>
+            <div class="login-card-float parallax-item login-card-float-3">
+                <div class="login-card-chip"></div>
+                <div class="login-card-lines">
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="login-form-card">
+            @ChildContent
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string HeadlineLinea1 { get; set; } = "";
+    [Parameter, EditorRequired] public string HeadlineLinea2 { get; set; } = "";
+    [Parameter, EditorRequired] public string Subtitulo { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("parallaxStage.init", ".login-visual-stage", ".login-card-float", 3);
+        }
+    }
+}

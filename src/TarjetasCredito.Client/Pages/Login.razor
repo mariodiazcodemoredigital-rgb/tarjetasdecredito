@@ -1,0 +1,105 @@
+@page "/login"
+@using TarjetasCredito.Client.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject ThemeService ThemeService
+@inject DialogService Dialogs
+@inject IJSRuntime JS
+
+<PageTitle>Iniciar sesión</PageTitle>
+
+<AuthShell HeadlineLinea1="Tu dinero," HeadlineLinea2="bajo control."
+           Subtitulo="Sabe qué tarjeta conviene usar hoy y nunca más se te pase una fecha de pago.">
+    <h1>Bienvenido</h1>
+    <p>Inicia sesión con tu correo para administrar tus tarjetas.</p>
+
+    <EditForm Model="modelo" OnValidSubmit="EnviarAsync" autocomplete="off">
+        <DataAnnotationsValidator />
+
+        <div class="field">
+            <label>Correo electrónico</label>
+            <InputText @bind-Value="modelo.Email" type="email" placeholder="tucorreo@ejemplo.com"
+                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')" />
+        </div>
+
+        <div class="field">
+            <label>Contraseña</label>
+            <InputText @bind-Value="modelo.Password" type="password" placeholder="••••••••"
+                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')" />
+        </div>
+
+        <button class="btn" type="submit" disabled="@enviando">
+            @(enviando ? "Entrando..." : "Entrar")
+        </button>
+    </EditForm>
+
+    @if (faceIdDisponible)
+    {
+        <button class="btn btn-secondary" type="button" disabled="@enviandoFaceId" @onclick="EntrarConFaceIdAsync">
+            @(enviandoFaceId ? "Verificando..." : "🔐 Entrar con Face ID")
+        </button>
+    }
+
+    <p class="login-form-footer">
+        ¿No tienes cuenta? <a href="/register">Regístrate</a>
+    </p>
+</AuthShell>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private readonly LoginModel modelo = new();
+    private bool enviando;
+    private bool enviandoFaceId;
+    private bool faceIdDisponible;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            faceIdDisponible = await JS.InvokeAsync<bool>("faceIdAuth.disponible");
+            StateHasChanged();
+        }
+    }
+
+    private async Task EnviarAsync()
+    {
+        enviando = true;
+
+        var resultado = await AuthService.IniciarSesionAsync(modelo.Email, modelo.Password);
+        if (resultado.Exitoso)
+        {
+            await ThemeService.CargarDesdePerfilAsync();
+            Navigation.NavigateTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl, replace: true);
+        }
+        else
+        {
+            enviando = false;
+            await Dialogs.ToastErrorAsync(string.Join(" ", resultado.Errores));
+        }
+    }
+
+    private async Task EntrarConFaceIdAsync()
+    {
+        enviandoFaceId = true;
+
+        var resultado = await AuthService.IniciarSesionConFaceIdAsync();
+        if (resultado.Exitoso)
+        {
+            await ThemeService.CargarDesdePerfilAsync();
+            Navigation.NavigateTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl, replace: true);
+        }
+        else
+        {
+            enviandoFaceId = false;
+            await Dialogs.ToastErrorAsync(string.Join(" ", resultado.Errores));
+        }
+    }
+
+    private class LoginModel
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+    }
+}

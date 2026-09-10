@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="TarjetasCredito.Client/TarjetasCredito.Client.csproj" />
+  <Project Path="TarjetasCredito.Domain/TarjetasCredito.Domain.csproj" />
+  <Project Path="TarjetasCredito.Infrastructure/TarjetasCredito.Infrastructure.csproj" />
+  <Project Path="TarjetasCredito.Server/TarjetasCredito.Server.csproj" />
+  <Project Path="TarjetasCredito.Shared/TarjetasCredito.Shared.csproj" />
+</Solution>

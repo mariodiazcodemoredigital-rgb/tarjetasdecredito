@@ -1,0 +1,157 @@
+@page "/"
+@attribute [Authorize]
+@using TarjetasCredito.Client.Services
+@using TarjetasCredito.Shared.Dtos
+@inject CreditCardApiService CreditCardApi
+@inject RecommendationApiService RecommendationApi
+@inject PaymentReminderApiService RemindersApi
+@inject UserProfileService UserProfile
+@inject DialogService Dialogs
+@implements IDisposable
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="page-header">
+    <span class="page-icon-chip">🏠</span>
+    <h1>Hola@(string.IsNullOrWhiteSpace(UserProfile.Perfil?.Nombres) ? "" : $", {UserProfile.Perfil.Nombres}") 👋</h1>
+</div>
+<p>¿Con qué tarjeta conviene pagar hoy?</p>
+
+@if (cargando)
+{
+    <EstadoCarga Cantidad="2" />
+}
+else if (sinConexion || errorServidor)
+{
+    <EstadoSinConexion SinConexion="sinConexion" OnReintentar="CargarAsync" />
+}
+else if (tarjetas.Count == 0)
+{
+    <EstadoVacio Icono="💳" Titulo="Registra tu primera tarjeta" Descripcion="Agrega una tarjeta de crédito para empezar a recibir recomendaciones de pago y recordatorios automáticos.">
+        <a class="btn" href="tarjetas">Registrar mi primera tarjeta</a>
+    </EstadoVacio>
+}
+else
+{
+    <div class="card entrada-suave">
+        <h3>¿Qué tarjeta uso hoy?</h3>
+        <div class="field">
+            <label>Monto de la compra</label>
+            <div class="input-currency">
+                <span class="input-currency-prefix">$</span>
+                <input type="number" min="0" step="0.01" @bind="monto" @bind:event="oninput" placeholder="0.00" />
+            </div>
+        </div>
+        <button class="btn" @onclick="RecomendarAsync" disabled="@(monto <= 0 || recomendando)">
+            @(recomendando ? "Calculando..." : "Recomendar tarjeta")
+        </button>
+
+        @if (recomendacion is not null)
+        {
+            @if (recomendacion.CreditCardIdRecomendada is not null)
+            {
+                <div class="alert @(recomendacion.Advertencia ? "alert-danger" : "alert-info")" style="margin-top:1rem;">
+                    <strong>@recomendacion.NombreTarjetaRecomendada</strong>
+                    <p style="margin:0.35rem 0 0;">@recomendacion.Explicacion</p>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-danger" style="margin-top:1rem;">@recomendacion.Explicacion</div>
+            }
+        }
+    </div>
+
+    @if (proximosVencimientos.Count > 0)
+    {
+        <div class="card entrada-suave">
+            <h3>Próximos vencimientos</h3>
+            @foreach (var r in proximosVencimientos)
+            {
+                <div class="recordatorio-header card-interactive" style="margin-bottom:0.6rem; padding:0.4rem; border-radius:var(--radius-sm);">
+                    <span class="recordatorio-color" style="background:@r.ColorHex;"></span>
+                    <strong style="flex:1;">@r.NombreTarjeta</strong>
+                    <span class="badge @UrgenciaClase(r.Urgencia)">@r.FechaLimitePago.ToString("dd/MM/yyyy")</span>
+                </div>
+            }
+            <a class="btn btn-secondary" style="width:auto;" href="pagos">Ver todos</a>
+        </div>
+    }
+}
+
+@code {
+    private List<CreditCardDto> tarjetas = [];
+    private List<PaymentReminderDto> proximosVencimientos = [];
+    private bool cargando = true;
+    private bool sinConexion;
+    private bool errorServidor;
+    private decimal monto;
+    private bool recomendando;
+    private RecomendacionResponse? recomendacion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserProfile.CambioPerfil += OnPerfilCambio;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        sinConexion = false;
+        errorServidor = false;
+
+        var resultado = await CreditCardApi.ObtenerTodasAsync();
+        if (resultado.Exitoso)
+        {
+            tarjetas = resultado.Datos!;
+
+            if (tarjetas.Count > 0)
+            {
+                // Widget secundario: si falla, simplemente no se muestra — no bloquea el resto del Dashboard.
+                var recordatorios = await RemindersApi.ObtenerTodosAsync();
+                if (recordatorios.Exitoso)
+                {
+                    proximosVencimientos = recordatorios.Datos!.Where(r => !r.Pagado).OrderBy(r => r.DiasHastaLimite).Take(3).ToList();
+                }
+            }
+        }
+        else
+        {
+            sinConexion = resultado.SinConexion;
+            errorServidor = resultado.ErrorServidor;
+        }
+
+        cargando = false;
+    }
+
+    private async Task RecomendarAsync()
+    {
+        recomendando = true;
+        try
+        {
+            recomendacion = await RecommendationApi.RecomendarAsync(monto);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            recomendacion = null;
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+        finally
+        {
+            recomendando = false;
+        }
+    }
+
+    private static string UrgenciaClase(UrgenciaPagoDto urgencia) => urgencia switch
+    {
+        UrgenciaPagoDto.Vencido => "badge-danger",
+        UrgenciaPagoDto.Inminente => "badge-danger",
+        UrgenciaPagoDto.Proximo => "badge-alerta",
+        _ => ""
+    };
+
+    private void OnPerfilCambio() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => UserProfile.CambioPerfil -= OnPerfilCambio;
+}

@@ -1,0 +1,427 @@
+@page "/configuracion"
+@attribute [Authorize]
+@using TarjetasCredito.Client.Services
+@using TarjetasCredito.Shared.Dtos
+@inject ThemeService ThemeService
+@inject AuthService AuthService
+@inject UserProfileService UserProfile
+@inject DialogService Dialogs
+@inject NavigationManager Navigation
+@inject PasskeyApiService PasskeyApi
+@inject PushNotificationApiService PushApi
+@inject IJSRuntime JS
+
+<PageTitle>Configuración</PageTitle>
+
+<div class="page-header">
+    <span class="page-icon-chip">⚙️</span>
+    <h1>Configuración</h1>
+</div>
+
+<div class="card entrada-suave">
+    <h3>Tu perfil</h3>
+    <p>Este nombre aparece en el saludo del dashboard y en el menú lateral.</p>
+    <div class="field">
+        <label>Nombre(s)</label>
+        <input @bind="nombres" @bind:event="oninput" placeholder="Mario" />
+    </div>
+    <div class="field">
+        <label>Apellidos</label>
+        <input @bind="apellidos" @bind:event="oninput" placeholder="Díaz" />
+    </div>
+    <button class="btn" style="width:auto;" disabled="@guardandoPerfil" @onclick="GuardarPerfilAsync">
+        @(guardandoPerfil ? "Guardando..." : "Guardar")
+    </button>
+</div>
+
+<div class="card entrada-suave">
+    <h3>Tema</h3>
+    <p>Elige cómo se ve la aplicación.</p>
+    <div class="tema-selector">
+        <button class="btn @(ThemeService.Actual == PreferenciaTemaDto.Light ? "" : "btn-secondary")" @onclick='() => CambiarTemaAsync(PreferenciaTemaDto.Light)'>☀️ Claro</button>
+        <button class="btn @(ThemeService.Actual == PreferenciaTemaDto.Dark ? "" : "btn-secondary")" @onclick='() => CambiarTemaAsync(PreferenciaTemaDto.Dark)'>🌙 Oscuro</button>
+        <button class="btn @(ThemeService.Actual == PreferenciaTemaDto.System ? "" : "btn-secondary")" @onclick='() => CambiarTemaAsync(PreferenciaTemaDto.System)'>🖥️ Automático</button>
+    </div>
+</div>
+
+<div class="card entrada-suave">
+    <h3>Face ID</h3>
+    <p>Accede más rápido usando el Face ID/Windows Hello/huella de este dispositivo, sin escribir tu contraseña.</p>
+
+    @if (!faceIdDisponible)
+    {
+        <p class="text-muted">Tu navegador o dispositivo no soporta Face ID/WebAuthn.</p>
+    }
+    else
+    {
+        @if (cargandoPasskeys)
+        {
+            <EstadoCarga Cantidad="1" />
+        }
+        else if (sinConexionPasskeys || errorServidorPasskeys)
+        {
+            <EstadoSinConexion SinConexion="sinConexionPasskeys" OnReintentar="CargarPasskeysAsync" />
+        }
+        else
+        {
+            @if (credenciales.Count > 0)
+            {
+                @foreach (var c in credenciales)
+                {
+                    <div class="recordatorio-header card-interactive" style="margin-bottom:0.6rem; padding:0.4rem; border-radius:var(--radius-sm);">
+                        <strong style="flex:1;">Face ID agregado el @c.CreatedAt.LocalDateTime.ToString("dd/MM/yyyy")</strong>
+                        <button type="button" class="btn btn-danger" style="width:auto;" title="Eliminar" @onclick="() => EliminarPasskeyAsync(c)">🗑️</button>
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="text-muted">No tienes ningún Face ID configurado todavía.</p>
+            }
+
+            <button class="btn" style="width:auto;" disabled="@registrandoPasskey" @onclick="AgregarPasskeyAsync">
+                @(registrandoPasskey ? "Configurando..." : "Agregar Face ID")
+            </button>
+        }
+    }
+</div>
+
+<div class="card entrada-suave">
+    <h3>Notificaciones</h3>
+    <p>Recibe un aviso cuando se acerque la fecha óptima o la fecha límite de pago de tus tarjetas.</p>
+
+    @if (!pushDisponible)
+    {
+        <p class="text-muted">Tu navegador o dispositivo no soporta notificaciones push.</p>
+    }
+    else if (cargandoPush)
+    {
+        <EstadoCarga Cantidad="1" />
+    }
+    else if (suscritoPush)
+    {
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+            <button class="btn btn-secondary" style="width:auto;" disabled="@procesandoPush" @onclick="DesactivarNotificacionesAsync">
+                @(procesandoPush ? "Desactivando..." : "Desactivar notificaciones")
+            </button>
+            <button class="btn btn-secondary" style="width:auto;" disabled="@enviandoPrueba" @onclick="EnviarPruebaAsync">
+                @(enviandoPrueba ? "Enviando..." : "Enviar notificación de prueba")
+            </button>
+        </div>
+    }
+    else
+    {
+        <button class="btn" style="width:auto;" disabled="@procesandoPush" @onclick="ActivarNotificacionesAsync">
+            @(procesandoPush ? "Activando..." : "Activar notificaciones")
+        </button>
+    }
+</div>
+
+<div class="card entrada-suave">
+    <h3>Sesión</h3>
+    <button class="btn btn-danger" style="width:auto;" @onclick="CerrarSesionAsync">Cerrar sesión</button>
+</div>
+
+@code {
+    private string nombres = "";
+    private string apellidos = "";
+    private bool guardandoPerfil;
+
+    private bool faceIdDisponible;
+    private List<PasskeyInfoDto> credenciales = [];
+    private bool cargandoPasskeys = true;
+    private bool sinConexionPasskeys;
+    private bool errorServidorPasskeys;
+    private bool registrandoPasskey;
+
+    private bool pushDisponible;
+    private bool cargandoPush = true;
+    private bool suscritoPush;
+    private bool procesandoPush;
+    private bool enviandoPrueba;
+    private string? endpointSuscripcionActual;
+
+    protected override void OnInitialized()
+    {
+        nombres = UserProfile.Perfil?.Nombres ?? "";
+        apellidos = UserProfile.Perfil?.Apellidos ?? "";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            faceIdDisponible = await JS.InvokeAsync<bool>("faceIdAuth.disponible");
+            if (faceIdDisponible)
+            {
+                await CargarPasskeysAsync();
+            }
+
+            pushDisponible = await JS.InvokeAsync<bool>("webPush.disponible");
+            if (pushDisponible)
+            {
+                await CargarEstadoPushAsync();
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarEstadoPushAsync()
+    {
+        cargandoPush = true;
+
+        var suscripcionJson = await JS.InvokeAsync<string?>("webPush.obtenerSuscripcionActual");
+        if (suscripcionJson is not null)
+        {
+            var suscripcion = System.Text.Json.JsonSerializer.Deserialize<SuscripcionPushBrowserDto>(suscripcionJson, JsonDefaults.Options);
+            endpointSuscripcionActual = suscripcion?.Endpoint;
+            suscritoPush = endpointSuscripcionActual is not null;
+        }
+        else
+        {
+            endpointSuscripcionActual = null;
+            suscritoPush = false;
+        }
+
+        cargandoPush = false;
+        StateHasChanged();
+    }
+
+    private async Task ActivarNotificacionesAsync()
+    {
+        procesandoPush = true;
+
+        try
+        {
+            var clave = await PushApi.ObtenerClavePublicaAsync();
+            if (!clave.Exitoso)
+            {
+                await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+                return;
+            }
+
+            string suscripcionJson;
+            try
+            {
+                suscripcionJson = await JS.InvokeAsync<string>("webPush.suscribir", clave.Datos!.ClavePublica);
+            }
+            catch (JSException)
+            {
+                await Dialogs.ToastErrorAsync("No se pudo activar. Revisa los permisos de notificaciones del navegador.");
+                return;
+            }
+
+            var suscripcion = System.Text.Json.JsonSerializer.Deserialize<SuscripcionPushBrowserDto>(suscripcionJson, JsonDefaults.Options)
+                ?? throw new InvalidOperationException("Suscripción inválida.");
+
+            var response = await PushApi.SuscribirAsync(new SuscripcionPushRequest(
+                suscripcion.Endpoint, suscripcion.Keys.P256dh, suscripcion.Keys.Auth));
+
+            if (response.IsSuccessStatusCode)
+            {
+                endpointSuscripcionActual = suscripcion.Endpoint;
+                suscritoPush = true;
+                await Dialogs.ToastExitoAsync("Notificaciones activadas.");
+            }
+            else
+            {
+                await Dialogs.ToastErrorAsync("No se pudo activar. Intenta de nuevo.");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+        finally
+        {
+            procesandoPush = false;
+        }
+    }
+
+    private async Task DesactivarNotificacionesAsync()
+    {
+        procesandoPush = true;
+
+        try
+        {
+            await JS.InvokeVoidAsync("webPush.desuscribir");
+
+            if (endpointSuscripcionActual is not null)
+            {
+                await PushApi.DesuscribirAsync(endpointSuscripcionActual);
+            }
+
+            suscritoPush = false;
+            endpointSuscripcionActual = null;
+            await Dialogs.ToastExitoAsync("Notificaciones desactivadas.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+        finally
+        {
+            procesandoPush = false;
+        }
+    }
+
+    private async Task EnviarPruebaAsync()
+    {
+        enviandoPrueba = true;
+
+        try
+        {
+            var response = await PushApi.EnviarPruebaAsync();
+            if (response.IsSuccessStatusCode)
+            {
+                await Dialogs.ToastExitoAsync("Notificación de prueba enviada. Debería llegarte en unos segundos.");
+            }
+            else
+            {
+                var mensaje = await ErrorMessageHelper.ExtraerMensajeAsync(response, "No se pudo enviar la notificación de prueba.");
+                await Dialogs.ToastErrorAsync(mensaje);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+        finally
+        {
+            enviandoPrueba = false;
+        }
+    }
+
+    private class SuscripcionPushBrowserDto
+    {
+        public string Endpoint { get; set; } = "";
+        public SuscripcionPushKeysDto Keys { get; set; } = new();
+    }
+
+    private class SuscripcionPushKeysDto
+    {
+        public string P256dh { get; set; } = "";
+        public string Auth { get; set; } = "";
+    }
+
+    private async Task CargarPasskeysAsync()
+    {
+        cargandoPasskeys = true;
+        sinConexionPasskeys = false;
+        errorServidorPasskeys = false;
+
+        var resultado = await PasskeyApi.ListarAsync();
+        if (resultado.Exitoso)
+        {
+            credenciales = resultado.Datos!;
+        }
+        else
+        {
+            sinConexionPasskeys = resultado.SinConexion;
+            errorServidorPasskeys = resultado.ErrorServidor;
+        }
+
+        cargandoPasskeys = false;
+        StateHasChanged();
+    }
+
+    private async Task AgregarPasskeyAsync()
+    {
+        registrandoPasskey = true;
+
+        try
+        {
+            var opciones = await PasskeyApi.ObtenerOpcionesRegistroAsync();
+
+            string credencial;
+            try
+            {
+                credencial = await JS.InvokeAsync<string>("faceIdAuth.registrar", opciones);
+            }
+            catch (JSException)
+            {
+                await Dialogs.ToastErrorAsync("No se pudo configurar Face ID. Intenta de nuevo.");
+                return;
+            }
+
+            var response = await PasskeyApi.RegistrarAsync(credencial);
+            if (response.IsSuccessStatusCode)
+            {
+                await CargarPasskeysAsync();
+                await Dialogs.ToastExitoAsync("Face ID configurado.");
+            }
+            else
+            {
+                await Dialogs.ToastErrorAsync("No se pudo registrar la credencial. Intenta de nuevo.");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+        finally
+        {
+            registrandoPasskey = false;
+        }
+    }
+
+    private async Task EliminarPasskeyAsync(PasskeyInfoDto credencial)
+    {
+        var confirmado = await Dialogs.ConfirmarEliminarAsync(
+            "¿Eliminar este Face ID?",
+            "Ya no vas a poder usarlo para iniciar sesión en este dispositivo.",
+            "Eliminar");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await PasskeyApi.EliminarAsync(credencial.CredentialId);
+            if (response.IsSuccessStatusCode)
+            {
+                await CargarPasskeysAsync();
+                await Dialogs.ToastExitoAsync("Face ID eliminado.");
+            }
+            else
+            {
+                await Dialogs.ToastErrorAsync("No se pudo eliminar. Intenta de nuevo.");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+    }
+
+    private async Task GuardarPerfilAsync()
+    {
+        guardandoPerfil = true;
+        var ok = await UserProfile.ActualizarAsync(nombres, apellidos);
+        guardandoPerfil = false;
+
+        if (ok)
+        {
+            await Dialogs.ToastExitoAsync("Perfil actualizado.");
+        }
+        else
+        {
+            await Dialogs.ToastErrorAsync("No se pudo guardar el perfil. Intenta de nuevo.");
+        }
+    }
+
+    private async Task CambiarTemaAsync(PreferenciaTemaDto tema)
+    {
+        await ThemeService.EstablecerAsync(tema);
+        StateHasChanged();
+    }
+
+    private async Task CerrarSesionAsync()
+    {
+        await AuthService.CerrarSesionAsync();
+        Navigation.NavigateTo("/login", replace: true);
+    }
+}

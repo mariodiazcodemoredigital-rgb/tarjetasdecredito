@@ -1,0 +1,16 @@
+<div class="card estado-sin-conexion">
+    <div class="estado-sin-conexion-icono">📡</div>
+    <p>@Mensaje</p>
+    <button class="btn" style="width:auto;" @onclick="Reintentar">Reintentar</button>
+</div>
+
+@code {
+    [Parameter] public bool SinConexion { get; set; }
+    [Parameter] public EventCallback OnReintentar { get; set; }
+
+    private string Mensaje => SinConexion
+        ? "No se pudo conectar. Revisa tu conexión a internet."
+        : "Ocurrió un error al cargar la información.";
+
+    private Task Reintentar() => OnReintentar.InvokeAsync();
+}

@@ -1,0 +1,177 @@
+@using TarjetasCredito.Client.Services
+@using TarjetasCredito.Shared.Dtos
+@inject CreditCardApiService CreditCardApi
+@inject DialogService Dialogs
+
+<div class="card tarjeta-form-card">
+    <h3>@(EsEdicion ? "Editar tarjeta" : "Nueva tarjeta")</h3>
+
+    <div class="tarjeta-form-preview">
+        <CreditCardVisual Tarjeta="Vista" />
+    </div>
+
+    <EditForm Model="modelo" OnValidSubmit="GuardarAsync">
+        <DataAnnotationsValidator />
+
+        <div class="field">
+            <label>Alias (ej. "Platino BBVA")</label>
+            <input @bind="modelo.Nombre" @bind:event="oninput" />
+        </div>
+        <div class="field">
+            <label>Banco</label>
+            <input @bind="modelo.Banco" @bind:event="oninput" />
+        </div>
+        <div class="field">
+            <label>Marca</label>
+            <select @bind="modelo.Marca">
+                <option value="@MarcaTarjetaDto.Visa">Visa</option>
+                <option value="@MarcaTarjetaDto.Mastercard">Mastercard</option>
+                <option value="@MarcaTarjetaDto.AmericanExpress">American Express</option>
+                <option value="@MarcaTarjetaDto.Otra">Otra</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Últimos 4 dígitos</label>
+            <input @bind="modelo.UltimosCuatroDigitos" @bind:event="oninput" maxlength="4" />
+        </div>
+        <div class="field">
+            <label>Límite de crédito</label>
+            <div class="input-currency">
+                <span class="input-currency-prefix">$</span>
+                <input type="number" min="0" step="100" @bind="modelo.LimiteCredito" @bind:event="oninput" />
+            </div>
+        </div>
+        <div class="field">
+            <label>Día de corte (1-31)</label>
+            <input type="number" @bind="modelo.DiaCorte" @bind:event="oninput" />
+        </div>
+        <div class="field">
+            <label>Días para pago desde el corte</label>
+            <input type="number" @bind="modelo.DiasParaPago" @bind:event="oninput" />
+        </div>
+        <div class="field">
+            <label>Tasa de interés anual % (opcional)</label>
+            <InputNumber @bind-Value="modelo.TasaInteresAnual" />
+        </div>
+
+        <div class="field">
+            <label>Color de la tarjeta</label>
+            <div class="color-swatches">
+                <button type="button" class="color-swatch color-swatch-auto @(modelo.ColorHex is null ? "seleccionado" : "")"
+                        title="Automático" @onclick="() => modelo.ColorHex = null">✨</button>
+                @foreach (var color in ColorPalette.Colores)
+                {
+                    <button type="button" class="color-swatch @(modelo.ColorHex == color ? "seleccionado" : "")"
+                            style="background:@color;" title="@color" @onclick="() => modelo.ColorHex = color"></button>
+                }
+                <label class="color-swatch color-swatch-custom" style="@(EsColorPersonalizado ? $"background:{modelo.ColorHex};" : "")" title="Personalizado">
+                    🎨
+                    <input type="color" value="@(modelo.ColorHex ?? ColorPalette.Colores[0])" @onchange="OnColorPersonalizado" />
+                </label>
+            </div>
+            <span class="text-muted">Si no eliges uno, se asigna automáticamente.</span>
+        </div>
+
+        <div style="display:flex;gap:0.6rem;">
+            <button class="btn" style="width:auto;" type="submit" disabled="@guardando">@(guardando ? "Guardando..." : "Guardar")</button>
+            <button class="btn btn-secondary" style="width:auto;" type="button" @onclick="Cancelar">Cancelar</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    [Parameter] public CreditCardDto? TarjetaExistente { get; set; }
+    [Parameter] public EventCallback OnGuardado { get; set; }
+    [Parameter] public EventCallback OnCancelado { get; set; }
+
+    private NuevaTarjetaModelo modelo = new();
+    private bool guardando;
+
+    private bool EsEdicion => TarjetaExistente is not null;
+    private bool EsColorPersonalizado => modelo.ColorHex is not null && !ColorPalette.Colores.Contains(modelo.ColorHex);
+
+    private CreditCardDto Vista => new(
+        TarjetaExistente?.Id ?? Guid.Empty,
+        string.IsNullOrWhiteSpace(modelo.Nombre) ? "Alias de tu tarjeta" : modelo.Nombre,
+        string.IsNullOrWhiteSpace(modelo.Banco) ? "Banco" : modelo.Banco,
+        string.IsNullOrWhiteSpace(modelo.UltimosCuatroDigitos) ? "••••" : modelo.UltimosCuatroDigitos.PadRight(4, '•')[..4],
+        modelo.Marca,
+        modelo.LimiteCredito,
+        modelo.DiaCorte,
+        modelo.DiasParaPago,
+        modelo.TasaInteresAnual,
+        true,
+        TarjetaExistente?.UtilizacionActual ?? 0m,
+        modelo.ColorHex ?? ColorPalette.Colores[0]);
+
+    protected override void OnParametersSet()
+    {
+        if (TarjetaExistente is { } t)
+        {
+            modelo = new NuevaTarjetaModelo
+            {
+                Nombre = t.Nombre,
+                Banco = t.Banco,
+                UltimosCuatroDigitos = t.UltimosCuatroDigitos,
+                Marca = t.Marca,
+                LimiteCredito = t.LimiteCredito,
+                DiaCorte = t.DiaCorte,
+                DiasParaPago = t.DiasParaPago,
+                TasaInteresAnual = t.TasaInteresAnual,
+                ColorHex = t.ColorHex
+            };
+        }
+    }
+
+    private void OnColorPersonalizado(ChangeEventArgs e) => modelo.ColorHex = e.Value?.ToString();
+
+    private async Task GuardarAsync()
+    {
+        guardando = true;
+
+        try
+        {
+            var request = new CrearCreditCardRequest(
+                modelo.Nombre, modelo.Banco, modelo.UltimosCuatroDigitos, modelo.Marca,
+                modelo.LimiteCredito, modelo.DiaCorte, modelo.DiasParaPago, modelo.TasaInteresAnual, modelo.ColorHex);
+
+            var response = EsEdicion
+                ? await CreditCardApi.ActualizarAsync(TarjetaExistente!.Id, request)
+                : await CreditCardApi.CrearAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await Dialogs.ToastExitoAsync(EsEdicion ? "Tarjeta actualizada." : "Tarjeta agregada.");
+                await OnGuardado.InvokeAsync();
+            }
+            else
+            {
+                var mensaje = await ErrorMessageHelper.ExtraerMensajeAsync(response, "No se pudo guardar la tarjeta. Intenta de nuevo.");
+                await Dialogs.ToastErrorAsync(mensaje);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private Task Cancelar() => OnCancelado.InvokeAsync();
+
+    private class NuevaTarjetaModelo
+    {
+        public string Nombre { get; set; } = "";
+        public string Banco { get; set; } = "";
+        public string UltimosCuatroDigitos { get; set; } = "";
+        public MarcaTarjetaDto Marca { get; set; } = MarcaTarjetaDto.Otra;
+        public decimal LimiteCredito { get; set; }
+        public int DiaCorte { get; set; } = 1;
+        public int DiasParaPago { get; set; } = 20;
+        public decimal? TasaInteresAnual { get; set; }
+        public string? ColorHex { get; set; }
+    }
+}

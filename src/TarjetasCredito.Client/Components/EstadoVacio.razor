@@ -1,0 +1,18 @@
+@* Estado vacío reusable (Sprint 9, ver SPEC-005): icono + título + descripción + CTA opcional,
+   en vez de una sola línea de texto plano cuando todavía no hay datos que mostrar. *@
+<div class="card estado-vacio entrada-suave">
+    <div class="estado-vacio-icono">@Icono</div>
+    <h3>@Titulo</h3>
+    <p>@Descripcion</p>
+    @if (ChildContent is not null)
+    {
+        @ChildContent
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Icono { get; set; } = "";
+    [Parameter, EditorRequired] public string Titulo { get; set; } = "";
+    [Parameter, EditorRequired] public string Descripcion { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

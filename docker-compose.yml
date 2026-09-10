@@ -1,0 +1,25 @@
+services:
+  tarjetascredito:
+    build: .
+    container_name: tarjetascredito
+    restart: unless-stopped
+    ports:
+      # host:contenedor — ajusta el 8082 si ese puerto ya lo usa otro proyecto en tu VPS/Easypanel
+      - "8082:8080"
+    environment:
+      # SQLite y las llaves de Data Protection viven en el volumen de abajo — ver SPEC-001.
+      ConnectionStrings__Default: "Data Source=/app/data/tarjetascredito.db"
+      DataProtection__KeysPath: "/app/data/dpkeys"
+      # Dominio real donde queda publicada la app (sin protocolo ni puerto) — obligatorio para que
+      # Face ID/WebAuthn funcione fuera de localhost. Ver SPEC-004.
+      WebAuthn__ServerDomain: "tu-dominio.com"
+      # Claves VAPID para notificaciones push (ver SPEC-004) — genera un par una sola vez y pégalas
+      # aquí; nunca las dejes en blanco en producción o las notificaciones fallarán en silencio.
+      WebPush__VapidPublicKey: ""
+      WebPush__VapidPrivateKey: ""
+      WebPush__Subject: "mailto:tu-correo@ejemplo.com"
+    volumes:
+      - tarjetascredito_data:/app/data
+
+volumes:
+  tarjetascredito_data:

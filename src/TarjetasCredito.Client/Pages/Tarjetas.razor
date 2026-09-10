@@ -1,0 +1,158 @@
+@page "/tarjetas"
+@attribute [Authorize]
+@using TarjetasCredito.Client.Services
+@using TarjetasCredito.Shared.Dtos
+@inject CreditCardApiService CreditCardApi
+@inject DialogService Dialogs
+
+<PageTitle>Mis tarjetas</PageTitle>
+
+<div class="page-header">
+    <span class="page-icon-chip">💳</span>
+    <h1>Mis tarjetas</h1>
+</div>
+
+@if (modoFormulario is null)
+{
+    <button class="btn" style="width:auto;" @onclick="AbrirCrearAsync">+ Agregar tarjeta</button>
+}
+else if (modoFormulario == FormularioModo.Crear)
+{
+    <TarjetaFormCard OnGuardado="OnFormularioGuardadoAsync" OnCancelado="CerrarFormulario" />
+}
+else if (tarjetaEnEdicion is not null)
+{
+    <TarjetaFormCard TarjetaExistente="tarjetaEnEdicion" OnGuardado="OnFormularioGuardadoAsync" OnCancelado="CerrarFormulario" />
+}
+
+@if (cargando)
+{
+    <EstadoCarga Cantidad="2" />
+}
+else if (sinConexion || errorServidor)
+{
+    <EstadoSinConexion SinConexion="sinConexion" OnReintentar="CargarAsync" />
+}
+else if (tarjetas.Count == 0)
+{
+    <EstadoVacio Icono="💳" Titulo="Aún no tienes tarjetas" Descripcion="Da de alta tu primera tarjeta para empezar a llevar el control de tus pagos y compras." />
+}
+else
+{
+    <div class="tarjetas-stack entrada-suave" style="margin-top: 1.75rem;">
+        @foreach (var t in tarjetas)
+        {
+            <CreditCardVisual Tarjeta="t" PermitirEditar="true" PermitirEliminar="true"
+                               OnEditar="() => EditarAsync(t)" OnEliminar="() => DesactivarAsync(t)" />
+        }
+    </div>
+}
+
+@code {
+    private enum FormularioModo { Crear, Editar }
+
+    private List<CreditCardDto> tarjetas = [];
+    private bool cargando = true;
+    private bool sinConexion;
+    private bool errorServidor;
+    private FormularioModo? modoFormulario;
+    private CreditCardDto? tarjetaEnEdicion;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        sinConexion = false;
+        errorServidor = false;
+
+        var resultado = await CreditCardApi.ObtenerTodasAsync();
+        if (resultado.Exitoso)
+        {
+            tarjetas = resultado.Datos!;
+        }
+        else
+        {
+            sinConexion = resultado.SinConexion;
+            errorServidor = resultado.ErrorServidor;
+        }
+
+        cargando = false;
+    }
+
+    private async Task AbrirCrearAsync()
+    {
+        if (!await ConfirmarDescartarSiHayFormularioAbiertoAsync())
+        {
+            return;
+        }
+
+        tarjetaEnEdicion = null;
+        modoFormulario = FormularioModo.Crear;
+    }
+
+    private async Task EditarAsync(CreditCardDto tarjeta)
+    {
+        if (modoFormulario == FormularioModo.Editar && tarjetaEnEdicion?.Id == tarjeta.Id)
+        {
+            return;
+        }
+
+        if (!await ConfirmarDescartarSiHayFormularioAbiertoAsync())
+        {
+            return;
+        }
+
+        tarjetaEnEdicion = tarjeta;
+        modoFormulario = FormularioModo.Editar;
+    }
+
+    private async Task<bool> ConfirmarDescartarSiHayFormularioAbiertoAsync()
+    {
+        if (modoFormulario is null)
+        {
+            return true;
+        }
+
+        return await Dialogs.ConfirmarAsync(
+            "¿Descartar los cambios?",
+            "Tienes un formulario abierto sin guardar. Si continúas, se perderá la información que llevas capturada.",
+            "Descartar y continuar");
+    }
+
+    private void CerrarFormulario()
+    {
+        modoFormulario = null;
+        tarjetaEnEdicion = null;
+    }
+
+    private async Task OnFormularioGuardadoAsync()
+    {
+        CerrarFormulario();
+        await CargarAsync();
+    }
+
+    private async Task DesactivarAsync(CreditCardDto tarjeta)
+    {
+        var confirmado = await Dialogs.ConfirmarEliminarAsync(
+            $"¿Dar de baja \"{tarjeta.Nombre}\"?",
+            "No se borrará el historial de compras asociado, pero dejará de aparecer en tu lista.",
+            "Dar de baja");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            await CreditCardApi.DesactivarAsync(tarjeta.Id);
+            await CargarAsync();
+            await Dialogs.ToastExitoAsync($"\"{tarjeta.Nombre}\" se dio de baja.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+    }
+}
