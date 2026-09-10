@@ -6,6 +6,7 @@ using TarjetasCredito.Domain.Buro;
 using TarjetasCredito.Domain.Repositories;
 using TarjetasCredito.Infrastructure.Buro;
 using TarjetasCredito.Infrastructure.Data;
+using TarjetasCredito.Infrastructure.Email;
 using TarjetasCredito.Infrastructure.Identity;
 using TarjetasCredito.Infrastructure.Push;
 using TarjetasCredito.Infrastructure.Reminders;
@@ -23,6 +24,10 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=tarjetascredito.db"));
+
+// Envío real de correo (confirmación/recuperación de contraseña) — ver SPEC-004 "Envío de correo".
+// Se registra antes de AddIdentityApiEndpoints para que Identity lo resuelva en vez de su envío no-op.
+builder.Services.AddTransient<IEmailSender<ApplicationUser>, SmtpEmailSender>();
 
 // Identity con endpoints de API (bearer token) — sin Duende IdentityServer. Ver SPEC-001 y SPEC-004.
 builder.Services.AddIdentityApiEndpoints<ApplicationUser>(options =>

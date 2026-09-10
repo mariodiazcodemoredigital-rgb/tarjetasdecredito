@@ -1,4 +1,5 @@
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <div class="login-shell">
     <div class="login-section">
@@ -37,6 +38,23 @@
         if (firstRender)
         {
             await JS.InvokeVoidAsync("parallaxStage.init", ".login-visual-stage", ".login-card-float", 3);
+
+            // Bloquea el scroll del <body> completo mientras el login/register está montado (ver
+            // SPEC-005 "Login: sección única, sin scroll" — bug real de scroll en móvil, 2026-09-10).
+            // Se quita en DisposeAsync para no afectar el resto de la app tras iniciar sesión.
+            await JS.InvokeVoidAsync("document.body.classList.add", "auth-route");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("document.body.classList.remove", "auth-route");
+        }
+        catch (JSDisconnectedException)
+        {
+            // La conexión JS ya se cerró (ej. navegación que descarga la página) — nada que limpiar.
         }
     }
 }

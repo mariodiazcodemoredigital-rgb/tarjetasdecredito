@@ -388,6 +388,21 @@ a { color: var(--primary); text-decoration: none; }
    position:fixed + inset:0 saca la sección del flujo normal del layout a propósito: MainLayout envuelve
    todas las rutas (incluida /login) en .app-content, que trae padding pensado para páginas autenticadas
    (espacio reservado para el nav inferior fijo). Sin esto, ese padding sumaba altura y forzaba scroll. */
+/* Bug real reportado probando en celular (2026-09-10): tras escribir en los inputs y enviar el
+   formulario, en algún punto aparecía scroll vertical en el login. .login-shell ya es position:fixed,
+   pero html/body no tenían ningún límite de alto propio — el teclado táctil de iOS/Android puede
+   desplazar el viewport visual para dejar visible el input enfocado, y ese desplazamiento se quedaba
+   pegado como scroll real del documento aunque el teclado se cerrara. AuthShell agrega esta clase al
+   <body> mientras está montado (y la quita al salir) para bloquear el scroll del documento completo
+   solo en las rutas de auth — el resto de la app (páginas autenticadas, que sí necesitan scroll) no se
+   toca. */
+body.auth-route {
+    overflow: hidden;
+    height: 100%;
+    position: fixed;
+    width: 100%;
+}
+
 .login-shell {
     position: fixed;
     inset: 0;
@@ -756,6 +771,41 @@ a { color: var(--primary); text-decoration: none; }
     .skeleton { animation: none; background: var(--surface-2); }
 }
 
+/* Overlay de carga bloqueante reusable (Sprint 31, ver SPEC-005 "Patrón reutilizable: overlay de
+   carga bloqueante"). Cubre toda la pantalla con z-index alto y pointer-events:auto para que ningún
+   click/touch llegue al contenido de abajo mientras dura una ceremonia de un solo paso (ej. Face ID). */
+.overlay-bloqueante {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    background: rgba(11, 13, 18, 0.72);
+    backdrop-filter: blur(4px);
+    color: #fff;
+    text-align: center;
+    padding: 1.5rem;
+    pointer-events: auto;
+}
+.overlay-bloqueante p { color: rgba(255, 255, 255, 0.85); font-weight: 600; margin: 0; }
+.overlay-bloqueante-spinner {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    border: 0.28rem solid rgba(255, 255, 255, 0.25);
+    border-top-color: #fff;
+    animation: overlay-spin 0.8s linear infinite;
+}
+@keyframes overlay-spin {
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .overlay-bloqueante-spinner { animation-duration: 2s; }
+}
+
 .text-muted { color: var(--text-muted); font-size: 0.85rem; }
 .alert { padding: 0.75rem 1rem; border-radius: var(--radius-sm); font-size: 0.88rem; margin-bottom: 1rem; }
 .alert-danger { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
@@ -811,11 +861,21 @@ a { color: var(--primary); text-decoration: none; }
     transition: stroke-dasharray 0.05s ease-in-out;
 }
 
+/* El texto comparte exactamente la misma caja que el círculo (mismo inset/width/height/margin) y se
+   centra con flex dentro de ella, en vez del cálculo con número mágico (inset: 40vh + 3.25rem) del
+   template original, que no quedaba centrado de verdad (bug real reportado por el usuario probando en
+   su celular, 2026-09-10). */
 .loading-progress-text {
     position: absolute;
+    inset: 40vh 0 auto 0;
+    width: 6rem;
+    height: 6rem;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     font-weight: bold;
-    inset: calc(40vh + 3.25rem) 0 auto 0;
 }
 
 .loading-progress-text:after { content: var(--blazor-load-percentage-text, "Cargando"); }

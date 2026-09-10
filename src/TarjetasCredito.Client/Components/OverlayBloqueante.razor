@@ -1,0 +1,16 @@
+@* Overlay de carga bloqueante reusable (Sprint 31, ver SPEC-005): cubre toda la pantalla e impide
+   interactuar con cualquier otra cosa (inputs, otros botones) mientras dura una operación de un solo
+   paso sin vuelta atrás (ej. la ceremonia de Face ID) — a diferencia de un botón "Verificando..." que
+   solo se deshabilita a sí mismo, dejando el resto de la pantalla usable. *@
+@if (Mostrar)
+{
+    <div class="overlay-bloqueante" role="alert" aria-busy="true">
+        <div class="overlay-bloqueante-spinner"></div>
+        <p>@Mensaje</p>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Mostrar { get; set; }
+    [Parameter] public string Mensaje { get; set; } = "Procesando...";
+}

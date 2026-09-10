@@ -19,16 +19,18 @@
         <div class="field">
             <label>Correo electrónico</label>
             <InputText @bind-Value="modelo.Email" type="email" placeholder="tucorreo@ejemplo.com"
-                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')" />
+                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')"
+                       disabled="@enviandoFaceId" />
         </div>
 
         <div class="field">
             <label>Contraseña</label>
             <InputText @bind-Value="modelo.Password" type="password" placeholder="••••••••"
-                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')" />
+                       autocomplete="off" readonly="readonly" onfocus="this.removeAttribute('readonly')"
+                       disabled="@enviandoFaceId" />
         </div>
 
-        <button class="btn" type="submit" disabled="@enviando">
+        <button class="btn" type="submit" disabled="@(enviando || enviandoFaceId)">
             @(enviando ? "Entrando..." : "Entrar")
         </button>
     </EditForm>
@@ -44,6 +46,10 @@
         ¿No tienes cuenta? <a href="/register">Regístrate</a>
     </p>
 </AuthShell>
+
+@* Fuera de AuthShell/.login-form-card a propósito: debe cubrir TODA la pantalla (encabezado, tarjetas
+   flotantes, formulario), no solo el formulario — ver SPEC-005 "Overlay de carga bloqueante". *@
+<OverlayBloqueante Mostrar="enviandoFaceId" Mensaje="Verificando con Face ID..." />
 
 @code {
     [SupplyParameterFromQuery]
