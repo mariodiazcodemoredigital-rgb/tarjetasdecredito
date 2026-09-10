@@ -35,9 +35,7 @@ Reglas (basadas en los factores estándar de scoring de buró: historial de pago
 
 **Generación proactiva (Sprint 8, 2026-09-09)**: `PaymentReminderPushHostedService` (`BackgroundService`, ver SPEC-001) llama a ese mismo `AsegurarRecordatoriosAsync` pero **para todos los usuarios con al menos una tarjeta activa**, no solo el que hace el GET — necesario para poder avisarle a un usuario aunque no haya abierto la app. El mecanismo perezoso original se conserva sin cambios como respaldo (si el hosted service estuviera detenido, el usuario sigue viendo sus recordatorios correctos al entrar a Pagos). El hosted service corre cada hora (`PeriodicTimer`) y, tras asegurar los recordatorios, evalúa para cada uno no pagado si hoy coincide con alguna de las 3 fechas de aviso (ver "Notificaciones push" en SPEC-004) — cada aviso se manda como máximo una vez por recordatorio (columnas `NotificacionOptimaEnviadaUtc`/`NotificacionT3EnviadaUtc`/`NotificacionT1EnviadaUtc`).
 
-**Ciclos que se generan por tarjeta activa**:
-- El ciclo vigente: `CicloInicio` = corte anterior al de hoy, `CicloFin` = próximo corte (usa `CicloFacturacionHelper`), `FechaLimitePago` = `CicloFin + DiasParaPago`.
-- El ciclo siguiente al vigente (para que el usuario vea con antelación su próxima fecha límite, no solo la inminente).
+**Ciclo que se genera por tarjeta activa — un solo ciclo a la vez (decisión revertida, 2026-09-11)**: `CicloInicio` = corte anterior al de hoy, `CicloFin` = próximo corte (`CicloFacturacionHelper.CicloVigente`), `FechaLimitePago` = `CicloFin + DiasParaPago`. **Antes** (Sprint 23) también se generaba el ciclo siguiente por adelantado, para que el usuario viera con antelación su próxima fecha límite — el usuario, probando con una tarjeta real, encontró que ver 2 pendientes por tarjeta (el del mes en curso y uno del mes siguiente sin monto de estado de cuenta todavía) era confuso, no útil. Se revirtió a generar solo el ciclo vigente; el próximo ciclo se genera solo hasta que efectivamente llegue (la próxima vez que `AsegurarRecordatoriosAsync` corra después de que el ciclo actual haya cerrado).
 
 **Urgencia visual (para colorear/ordenar en la UI)**, calculada como días restantes hasta `FechaLimitePago` desde hoy:
 - Vencido (`< 0` días) o vence hoy/mañana (`0-1` días): rojo/`--danger`, máxima prioridad de orden.
@@ -46,6 +44,22 @@ Reglas (basadas en los factores estándar de scoring de buró: historial de pago
 - Recordatorios ya `Pagado = true` no participan en el orden de urgencia — se muestran aparte o al final, atenuados.
 
 **Marcar como pagado**: `PUT /api/paymentreminders/{id}/pagado` — el usuario captura `MontoEstadoCuenta` (opcional, si lo sabe) y la fecha de pago se registra como "ahora" (UTC) salvo que se indique otra. Si `MontoEstadoCuenta` queda vacío/null, no se puede aplicar la regla 2 de arriba ("nunca pagar solo el mínimo") para ese ciclo — la UI lo deja como dato faltante, no bloquea marcar como pagado.
+
+## Guía de fase del ciclo (Dashboard — Sprint 36, 2026-09-11)
+
+**Decisión**: además de mostrar fechas ("Próximos vencimientos"), el Dashboard tiene una sección "Mejora tu score" que le dice explícitamente al usuario, por cada tarjeta activa, **qué acción tomar hoy** según en qué momento del ciclo está — aplicando las reglas de la sección "Fechas de pago óptimas" de arriba de forma accionable, no solo informativa. No introduce datos nuevos: se calcula en el cliente a partir de los mismos campos que ya expone `PaymentReminderDto` (`CicloFin`, `FechaOptimaPago`, `FechaLimitePago`, `Pagado`).
+
+Cinco fases posibles para el recordatorio vigente de una tarjeta, evaluadas con `hoy` = fecha local del dispositivo:
+
+1. **Pagado** (`Pagado == true`): "Ciclo al día" — refuerzo positivo, sin acción pendiente.
+2. **Antes de la ventana óptima** (`hoy < FechaOptimaPago`): informa el corte próximo, sugiere pagar antes de `FechaOptimaPago` si se quiere bajar la utilización reportada — sin urgencia.
+3. **Ventana óptima de pago** (`FechaOptimaPago ≤ hoy < CicloFin`): la regla 1 de "Fechas de pago óptimas" en acción — recomienda pagar ahora, antes de que cierre el ciclo, para que el saldo reportado en el próximo corte sea menor.
+4. **Corte hecho, dentro del plazo** (`CicloFin ≤ hoy < FechaLimitePago`): el "período de gracia" estándar — recomienda pagar el total antes de `FechaLimitePago` para no generar intereses ni atraso.
+5. **Vencido** (`hoy ≥ FechaLimitePago`, no pagado): máxima urgencia — un pago tardío es el factor de mayor impacto negativo en el score (regla 4 de arriba).
+
+**Qué recordatorio se evalúa por tarjeta — bug real encontrado probando en navegador**: no es simplemente "el de `CicloFin` más reciente". Una tarjeta puede tener a la vez un recordatorio viejo sin pagar (su corte ya pasó, pero sigue dentro del plazo) *y* uno nuevo recién generado para el ciclo que acaba de empezar (`AsegurarRecordatoriosAsync` crea el del ciclo vigente en cuanto el anterior deja de serlo, sin esperar a que se pague). Elegir por `CicloFin` más reciente mostraba el nuevo y escondía que había un pago pendiente real. Regla correcta: el recordatorio **no pagado** con `FechaLimitePago` más próxima; si no hay ninguno pendiente, el más reciente ya pagado (para el estado "Ciclo al día").
+
+Implementación: `RecordatorioRelevante`/`FaseDeCiclo` en `Pages/Home.razor` (privados, único consumidor por ahora — si se reusan en otro lugar, ej. el copy de las notificaciones push del Sprint 8, se deben extraer a un helper compartido en vez de duplicar la lógica).
 
 ## Consulta y mejora de buró de crédito
 

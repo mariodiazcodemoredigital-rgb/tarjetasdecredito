@@ -290,6 +290,20 @@ Convención: `[ ]` pendiente, `[~]` en progreso, `[x]` completado.
 - [ ] Cómo se protege la ruta/endpoints (`[Authorize(Roles = "SuperAdmin")]` de ASP.NET Core Identity ya soporta esto de fábrica una vez que exista el rol).
 - [ ] Si el panel vive en el mismo Client (Blazor) con una ruta oculta, o si conviene mantenerlo completamente aparte.
 
+## Sprint 35 — Un solo ciclo de recordatorios a la vez ✅ (2026-09-11)
+- [x] `CicloFacturacionHelper.CiclosARecordar` (devolvía vigente + siguiente) reemplazado por `CicloVigente` (un solo ciclo) — `PaymentReminderGenerationService.AsegurarRecordatoriosAsync` ya no genera el ciclo siguiente por adelantado. Decisión del usuario probando con una tarjeta real: ver 2 pendientes por tarjeta (uno del mes en curso, otro del mes siguiente sin monto de estado de cuenta) era confuso.
+- [x] Documentado en [SPEC-003](docs/specs/SPEC_TarjetasCredito-003-ReglasNegocio.md).
+- [x] Compila limpio; único call site de la función anterior ya actualizado, sin referencias sueltas.
+- [ ] **Pendiente**: los recordatorios del "ciclo siguiente" que ya se hayan generado antes de este cambio (ej. en la cuenta real de producción del usuario, tarjeta "Stori") van a seguir existiendo en la base hasta que el usuario los borre a mano o hasta que ese ciclo efectivamente llegue y se convierta en el vigente — el fix solo evita generar más hacia adelante, no limpia retroactivamente. Se le ofreció un script de limpieza si lo pide.
+
+## Sprint 36 — "Mejora tu score" en el Dashboard ✅ (2026-09-11)
+- [x] Nueva sección en `Home.razor`, debajo de "Próximos vencimientos": una tarjeta de consejo por cada tarjeta activa, con 5 fases posibles (pagado / antes de la ventana óptima / ventana óptima de pago / corte hecho dentro del plazo / vencido) — reusa campos que `PaymentReminderDto` ya traía, sin endpoints ni datos nuevos.
+- [x] Documentado en [SPEC-003](docs/specs/SPEC_TarjetasCredito-003-ReglasNegocio.md), sección "Guía de fase del ciclo".
+- [x] **Bug real encontrado probando en navegador (no hipotético)**: la primera versión elegía, por tarjeta, el recordatorio con `CicloFin` más reciente — pero una tarjeta puede tener a la vez un recordatorio viejo sin pagar (corte ya pasado, aún dentro del plazo) y uno nuevo recién generado para el ciclo que apenas empezó. Elegir por `CicloFin` mostraba el nuevo y ocultaba que había un pago pendiente real. Corregido: se elige el **no pagado con `FechaLimitePago` más próxima**; si no hay ninguno pendiente, el más reciente ya pagado.
+- [x] Probado en navegador las 5 fases una por una, forzando fechas reales en la base de datos local (mismo patrón de prueba de sprints anteriores) — las 5 mostraron el título/color/mensaje correcto, incluida la que expuso el bug de selección de arriba.
+- [x] Verificado sin regresión: "Próximos vencimientos" y "¿Qué tarjeta uso hoy?" siguen funcionando igual; la nueva sección no aparece si no hay tarjetas (ya cubierto por `EstadoVacio`).
+- [x] Documentado en [AGENTS.md](AGENTS.md) el bloqueo de zoom táctil como comportamiento a replicar en futuros proyectos PWA del usuario (pedido explícito), además de quedar guardado en memoria de la sesión.
+
 ## Backlog futuro (sin sprint asignado)
 - [ ] Integración real con proveedor de buró de crédito (requiere credenciales del usuario).
 - [ ] Explicaciones de recomendación generadas por Claude API sobre el motor de reglas (híbrido).

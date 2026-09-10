@@ -32,6 +32,7 @@ Aplicación PWA (Blazor WebAssembly + .NET 10) para que un usuario registre sus 
 ## Patrones de UI reutilizables (consultar antes de crear un efecto nuevo)
 
 - **"Parallax stage"** (elementos decorativos que reaccionan al cursor, ej. las tarjetas flotantes del login): motor propio en `src/TarjetasCredito.Client/wwwroot/js/parallaxStage.js` + regla `.parallax-item` en `app.css`. Al usuario le gustó este efecto y quiere reutilizarlo en pantallas futuras — la guía completa de uso (y el bug ya corregido que hay que evitar repetir) está documentada en [SPEC_TarjetasCredito-005-UI.md](docs/specs/SPEC_TarjetasCredito-005-UI.md), sección "Patrón reutilizable: parallax stage". Léela antes de construir un efecto similar en vez de reinventarlo.
+- **Bloqueo de zoom táctil** (`maximum-scale=1.0, user-scalable=no` en el meta viewport + `touch-action: pan-x pan-y` en `html,body`): decisión explícita y permanente del usuario para que cualquier PWA suya se sienta como app instalada, no solo esta — ver [SPEC_TarjetasCredito-005-UI.md](docs/specs/SPEC_TarjetasCredito-005-UI.md), sección "Bloqueo de zoom táctil". El usuario pidió que esto quede como comportamiento por defecto también en proyectos futuros, no solo en TarjetasCredito — si trabajas en otra app suya, replica este mismo patrón desde el inicio en vez de esperar a que lo reporte de nuevo como bug.
 
 ## Convenciones de nombres de specs
 

@@ -77,11 +77,36 @@ else
             <a class="btn btn-secondary" style="width:auto;" href="pagos">Ver todos</a>
         </div>
     }
+
+    <div class="card entrada-suave">
+        <h3>📈 Mejora tu score</h3>
+        <p>Qué hacer con cada tarjeta hoy para cuidar tu historial crediticio.</p>
+        @foreach (var t in tarjetas)
+        {
+            var recordatorio = RecordatorioRelevante(t.Id);
+
+            if (recordatorio is not null)
+            {
+                var fase = FaseDeCiclo(recordatorio, DateTime.Now.Date);
+                <div class="recordatorio-header card-interactive" style="margin-bottom:0.6rem; padding:0.6rem; border-radius:var(--radius-sm); align-items:flex-start;">
+                    <span class="recordatorio-color" style="background:@t.ColorHex; margin-top:0.2rem;"></span>
+                    <div style="flex:1;">
+                        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.2rem;">
+                            <strong>@t.Nombre</strong>
+                            <span class="badge @fase.ClaseBadge">@fase.Titulo</span>
+                        </div>
+                        <span class="text-muted">@fase.Mensaje</span>
+                    </div>
+                </div>
+            }
+        }
+    </div>
 }
 
 @code {
     private List<CreditCardDto> tarjetas = [];
     private List<PaymentReminderDto> proximosVencimientos = [];
+    private List<PaymentReminderDto> todosLosRecordatorios = [];
     private bool cargando = true;
     private bool sinConexion;
     private bool errorServidor;
@@ -112,7 +137,8 @@ else
                 var recordatorios = await RemindersApi.ObtenerTodosAsync();
                 if (recordatorios.Exitoso)
                 {
-                    proximosVencimientos = recordatorios.Datos!.Where(r => !r.Pagado).OrderBy(r => r.DiasHastaLimite).Take(3).ToList();
+                    todosLosRecordatorios = recordatorios.Datos!;
+                    proximosVencimientos = todosLosRecordatorios.Where(r => !r.Pagado).OrderBy(r => r.DiasHastaLimite).Take(3).ToList();
                 }
             }
         }
@@ -141,6 +167,59 @@ else
         {
             recomendando = false;
         }
+    }
+
+    /// <summary>
+    /// El recordatorio de una tarjeta que de verdad importa mostrar: el pendiente más próximo a
+    /// vencer (nunca el ciclo vigente más reciente sin más) — una tarjeta puede tener a la vez un
+    /// recordatorio viejo sin pagar (todavía dentro de su plazo) y uno nuevo recién generado para el
+    /// ciclo que apenas empezó; mostrar el nuevo escondería que hay algo pendiente por pagar. Si no
+    /// hay ninguno pendiente, se usa el más reciente ya pagado (para el estado "Ciclo al día").
+    /// </summary>
+    private PaymentReminderDto? RecordatorioRelevante(Guid creditCardId)
+    {
+        var deLaTarjeta = todosLosRecordatorios.Where(r => r.CreditCardId == creditCardId);
+
+        return deLaTarjeta.Where(r => !r.Pagado).OrderBy(r => r.FechaLimitePago).FirstOrDefault()
+            ?? deLaTarjeta.OrderByDescending(r => r.CicloFin).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Guía accionable por fase del ciclo (ver SPEC-003 "Guía de fase del ciclo") — no introduce datos
+    /// nuevos, solo interpreta los campos que ya trae PaymentReminderDto para decirle al usuario qué
+    /// hacer hoy con cada tarjeta, no solo cuándo vence.
+    /// </summary>
+    private static (string Titulo, string Mensaje, string ClaseBadge) FaseDeCiclo(PaymentReminderDto r, DateTime hoy)
+    {
+        if (r.Pagado)
+        {
+            return ("✅ Ciclo al día", "Ya pagaste este ciclo. Vas muy bien.", "badge-success");
+        }
+
+        if (hoy < r.FechaOptimaPago.Date)
+        {
+            return ("Puedes seguir usando tu tarjeta",
+                $"Tu corte es el {r.CicloFin:dd/MM}. Si quieres bajar la utilización que se reporta, procura pagar antes del {r.FechaOptimaPago:dd/MM}.",
+                "");
+        }
+
+        if (hoy < r.CicloFin.Date)
+        {
+            return ("🎯 Ventana óptima de pago",
+                $"Faltan pocos días para tu corte ({r.CicloFin:dd/MM}). Pagar ahora reduce el saldo que se reporta este ciclo y ayuda a tu score.",
+                "badge-alerta");
+        }
+
+        if (hoy < r.FechaLimitePago.Date)
+        {
+            return ("Corte hecho — paga a tiempo",
+                $"Tu corte ya pasó. Tienes hasta el {r.FechaLimitePago:dd/MM} para pagar sin generar intereses ni atraso.",
+                "");
+        }
+
+        return ("⚠️ Urgente",
+            "Ya venció tu fecha límite. Un pago tardío es lo que más daña tu score — paga lo antes posible.",
+            "badge-danger");
     }
 
     private static string UrgenciaClase(UrgenciaPagoDto urgencia) => urgencia switch

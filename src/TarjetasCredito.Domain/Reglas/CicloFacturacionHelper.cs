@@ -23,22 +23,13 @@ public static class CicloFacturacionHelper
     }
 
     /// <summary>
-    /// Los dos ciclos que se deben tener como <see cref="Entities.PaymentReminder"/>: el vigente y el
-    /// siguiente (ver SPEC-003 "Generación y gestión de recordatorios de pago"). Función pura — quien la
-    /// llama decide qué hacer con los ciclos (ej. crear el recordatorio si no existe ya).
+    /// El ciclo de facturación vigente (el que contiene "fecha") — el único que se genera como
+    /// <see cref="Entities.PaymentReminder"/> (ver SPEC-003 "Generación y gestión de recordatorios de
+    /// pago": antes se generaba también el ciclo siguiente por adelantado, decisión revertida a
+    /// petición del usuario probando con datos reales — ver "un solo ciclo a la vez" en esa sección).
     /// </summary>
-    public static IReadOnlyList<(DateTime CicloInicio, DateTime CicloFin)> CiclosARecordar(int diaCorte, DateTime fecha)
-    {
-        var cicloFinVigente = ProximoCorte(diaCorte, fecha);
-        var cicloInicioVigente = UltimoCorte(diaCorte, fecha);
-        var cicloFinSiguiente = ProximoCorte(diaCorte, cicloFinVigente.AddDays(1));
-
-        return
-        [
-            (cicloInicioVigente, cicloFinVigente),
-            (cicloFinVigente, cicloFinSiguiente)
-        ];
-    }
+    public static (DateTime CicloInicio, DateTime CicloFin) CicloVigente(int diaCorte, DateTime fecha)
+        => (UltimoCorte(diaCorte, fecha), ProximoCorte(diaCorte, fecha));
 
     private static int DiaValidoEnMes(int year, int month, int dia) => Math.Min(dia, DateTime.DaysInMonth(year, month));
 }
