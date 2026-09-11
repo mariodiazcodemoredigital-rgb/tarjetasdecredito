@@ -8,17 +8,6 @@ public enum MarcaTarjeta
     Otra
 }
 
-public enum CategoriaCompra
-{
-    Supermercado,
-    Restaurantes,
-    Transporte,
-    Servicios,
-    Entretenimiento,
-    Salud,
-    Otro
-}
-
 public enum PreferenciaTema
 {
     Light,

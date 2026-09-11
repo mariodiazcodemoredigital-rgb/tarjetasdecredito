@@ -9,7 +9,11 @@ public class Purchase
 
     public decimal Monto { get; set; }
     public required string Descripcion { get; set; }
-    public CategoriaCompra Categoria { get; set; } = CategoriaCompra.Otro;
+
+    /// <summary>Texto libre (ver SPEC-002 "Categoría de compra: texto libre con sugerencias") — antes
+    /// era un enum fijo; el usuario puede escribir una categoría nueva propia.</summary>
+    public string Categoria { get; set; } = "Otro";
+
     public DateTime Fecha { get; set; } = DateTime.UtcNow;
 
     /// <summary>Meses sin intereses, si aplica.</summary>

@@ -3,6 +3,8 @@
 @using TarjetasCredito.Client.Services
 @using TarjetasCredito.Shared.Dtos
 @inject PaymentReminderApiService RemindersApi
+@inject CreditCardApiService CreditCardApi
+@inject CardPaymentApiService CardPaymentApi
 @inject DialogService Dialogs
 
 <PageTitle>Recordatorios de pago</PageTitle>
@@ -13,6 +15,76 @@
 </div>
 <p>Fecha óptima = paga antes del corte y baja tu utilización reportada. Fecha límite = último día sin generar intereses ni atraso.</p>
 
+@if (!cargandoTarjetas && tarjetas.Count > 0)
+{
+    <div class="card entrada-suave">
+        <h3>@(editandoAbonoId is null ? "Registrar abono" : "Editar abono")</h3>
+        <p class="text-muted">Un pago parcial o total a una tarjeta, independiente de marcar un recordatorio como pagado — baja tu utilización de inmediato.</p>
+
+        <EditForm Model="nuevoAbono" OnValidSubmit="GuardarAbonoAsync">
+            <div class="field">
+                <label>Tarjeta</label>
+                <InputSelect @bind-Value="nuevoAbono.CreditCardId">
+                    @foreach (var t in tarjetas)
+                    {
+                        <option value="@t.Id">@t.Nombre</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="field">
+                <label>Monto</label>
+                <div class="input-currency">
+                    <span class="input-currency-prefix">$</span>
+                    <input type="number" min="0.01" step="0.01" placeholder="0.00"
+                           value="@nuevoAbono.Monto?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                           @onchange="@(e => nuevoAbono.Monto = ParseMonto(e.Value?.ToString()))" />
+                </div>
+            </div>
+            <div class="field">
+                <label>Fecha</label>
+                <InputDate @bind-Value="nuevoAbono.Fecha" />
+            </div>
+            <div class="field">
+                <label>Nota (opcional)</label>
+                <InputText @bind-Value="nuevoAbono.Nota" />
+            </div>
+
+            <div style="display:flex; gap:0.6rem;">
+                <button class="btn" type="submit" disabled="@(guardandoAbono || nuevoAbono.Monto is null or <= 0)">
+                    @(guardandoAbono ? "Guardando..." : (editandoAbonoId is null ? "Registrar abono" : "Guardar cambios"))
+                </button>
+                @if (editandoAbonoId is not null)
+                {
+                    <button class="btn btn-secondary" type="button" style="width:auto;" @onclick="CancelarEdicionAbonoAsync">Cancelar</button>
+                }
+            </div>
+        </EditForm>
+
+        @if (cargandoAbonos)
+        {
+            <EstadoCarga Cantidad="2" />
+        }
+        else if (abonos.Count > 0)
+        {
+            <h4 style="margin-top:1.25rem;">Abonos registrados</h4>
+            @foreach (var a in abonos)
+            {
+                <div class="card compra-item card-interactive entrada-suave">
+                    <div>
+                        <strong>@a.NombreTarjeta</strong>
+                        <div class="text-muted">@FechaFormato.Corta(a.Fecha)@(string.IsNullOrWhiteSpace(a.Nota) ? "" : $" · {a.Nota}")</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <div class="compra-item-monto">$@a.Monto.ToString("N2")</div>
+                        <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAbono(a)">✏️</button>
+                        <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAbonoAsync(a)">🗑️</button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
 @if (cargando)
 {
     <EstadoCarga Cantidad="3" />
@@ -21,7 +93,7 @@ else if (sinConexion || errorServidor)
 {
     <EstadoSinConexion SinConexion="sinConexion" OnReintentar="CargarAsync" />
 }
-else if (pendientes.Count == 0 && pagados.Count == 0)
+else if (todosLosRecordatorios.Count == 0)
 {
     <EstadoVacio Icono="📅" Titulo="Aún no hay recordatorios" Descripcion="Registra al menos una tarjeta para que tus recordatorios de pago se generen automáticamente.">
         <a class="btn" href="tarjetas">Ir a Tarjetas</a>
@@ -45,15 +117,16 @@ else
                     <span class="badge @UrgenciaClase(r.Urgencia)">@UrgenciaTexto(r)</span>
                 </div>
                 <div class="recordatorio-fechas">
-                    <span>Fecha límite: <strong>@r.FechaLimitePago.ToString("dd/MM/yyyy")</strong></span>
-                    <span class="text-muted">Fecha óptima de pago: @r.FechaOptimaPago.ToString("dd/MM/yyyy")</span>
+                    <span>Fecha límite: <strong>@FechaFormato.Corta(r.FechaLimitePago)</strong></span>
+                    <span class="text-muted">Fecha óptima de pago: @FechaFormato.Corta(r.FechaOptimaPago)</span>
                 </div>
 
                 <div class="field">
                     <label>Monto del estado de cuenta (opcional)</label>
                     <div class="input-currency">
                         <span class="input-currency-prefix">$</span>
-                        <input type="number" min="0" step="0.01" value="@montoPorId.GetValueOrDefault(r.Id)"
+                        <input type="number" min="0" step="0.01"
+                               value="@montoPorId.GetValueOrDefault(r.Id)?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                                @onchange="@(e => montoPorId[r.Id] = ParseMonto(e.Value?.ToString()))" />
                     </div>
                 </div>
@@ -63,38 +136,115 @@ else
         }
     }
 
-    @if (pagados.Count > 0)
+    <h3 style="margin-top:1.75rem;">Historial</h3>
+    <p class="text-muted">Todo lo que ya pasó — pagado o vencido sin pagar — por mes.</p>
+    <div style="display:flex; gap:0.6rem; margin:0.5rem 0 1rem;">
+        <select @bind="mesSeleccionado">
+            @for (var m = 1; m <= 12; m++)
+            {
+                <option value="@m">@NombresMeses[m - 1]</option>
+            }
+        </select>
+        <select @bind="anioSeleccionado">
+            @foreach (var a in AniosDisponibles)
+            {
+                <option value="@a">@a</option>
+            }
+        </select>
+    </div>
+
+    @if (HistorialFiltrado.Count == 0)
     {
-        <h3 style="margin-top:1.75rem;">Historial de pagos</h3>
-        @foreach (var r in pagados)
+        <p class="text-muted">No hay recordatorios en @NombresMeses[mesSeleccionado - 1] @anioSeleccionado.</p>
+    }
+    else
+    {
+        @foreach (var r in HistorialFiltrado)
         {
-            <div class="card recordatorio-item recordatorio-pagado card-interactive entrada-suave">
+            <div class="card recordatorio-item @(r.Pagado ? "recordatorio-pagado" : "") card-interactive entrada-suave">
                 <div class="recordatorio-header">
                     <span class="recordatorio-color" style="background:@r.ColorHex;"></span>
                     <strong>@r.NombreTarjeta</strong>
-                    <span class="badge badge-success">Pagado</span>
+                    <span class="badge @(r.Pagado ? "badge-success" : "badge-danger")">@(r.Pagado ? "Pagado" : "Vencido, sin pagar")</span>
                 </div>
                 <div class="recordatorio-fechas">
-                    <span class="text-muted">Ciclo hasta @r.CicloFin.ToString("dd/MM/yyyy") · Pagado el @r.FechaPago?.ToString("dd/MM/yyyy")</span>
+                    <span class="text-muted">
+                        Fecha límite: @FechaFormato.Corta(r.FechaLimitePago)
+                        @if (r.Pagado && r.FechaPago.HasValue)
+                        {
+                            <text> · Pagado el @FechaFormato.Corta(r.FechaPago.Value)</text>
+                        }
+                    </span>
                     @if (r.MontoEstadoCuenta.HasValue)
                     {
                         <span class="text-muted">$@r.MontoEstadoCuenta.Value.ToString("N2")</span>
                     }
                 </div>
+
+                @if (!r.Pagado)
+                {
+                    <div class="field">
+                        <label>Monto del estado de cuenta (opcional)</label>
+                        <div class="input-currency">
+                            <span class="input-currency-prefix">$</span>
+                            <input type="number" min="0" step="0.01"
+                                   value="@montoPorId.GetValueOrDefault(r.Id)?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                   @onchange="@(e => montoPorId[r.Id] = ParseMonto(e.Value?.ToString()))" />
+                        </div>
+                    </div>
+                    <button class="btn" style="width:auto;" @onclick="() => MarcarPagadoAsync(r)">Marcar como pagado</button>
+                }
             </div>
         }
     }
 }
 
 @code {
+    private static readonly string[] NombresMeses =
+    [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+
+    private List<PaymentReminderDto> todosLosRecordatorios = [];
     private List<PaymentReminderDto> pendientes = [];
-    private List<PaymentReminderDto> pagados = [];
     private readonly Dictionary<Guid, decimal?> montoPorId = new();
     private bool cargando = true;
     private bool sinConexion;
     private bool errorServidor;
+    private int mesSeleccionado = DateTime.Now.Month;
+    private int anioSeleccionado = DateTime.Now.Year;
 
-    protected override async Task OnInitializedAsync() => await CargarAsync();
+    private List<CreditCardDto> tarjetas = [];
+    private bool cargandoTarjetas = true;
+    private List<CardPaymentDto> abonos = [];
+    private bool cargandoAbonos = true;
+    private bool guardandoAbono;
+    private Guid? editandoAbonoId;
+    private NuevoAbonoModelo nuevoAbono = new();
+
+    private List<PaymentReminderDto> HistorialFiltrado => todosLosRecordatorios
+        .Where(r => !EsProximo(r) && r.FechaLimitePago.Month == mesSeleccionado && r.FechaLimitePago.Year == anioSeleccionado)
+        .OrderByDescending(r => r.FechaLimitePago)
+        .ToList();
+
+    private List<int> AniosDisponibles => todosLosRecordatorios
+        .Select(r => r.FechaLimitePago.Year)
+        .Append(DateTime.Now.Year)
+        .Distinct()
+        .OrderByDescending(a => a)
+        .ToList();
+
+    /// <summary>Un recordatorio es "próximo" (vive en Pendientes, no en Historial) mientras esté sin
+    /// pagar y su fecha límite no haya pasado — ver SPEC-003 "Próximos vencimientos vs. Historial".</summary>
+    private static bool EsProximo(PaymentReminderDto r) => !r.Pagado && r.DiasHastaLimite >= 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await CargarTarjetasAsync();
+        await CargarAbonosAsync();
+    }
 
     private async Task CargarAsync()
     {
@@ -105,9 +255,8 @@ else
         var resultado = await RemindersApi.ObtenerTodosAsync();
         if (resultado.Exitoso)
         {
-            var todos = resultado.Datos!;
-            pendientes = todos.Where(r => !r.Pagado).OrderBy(r => r.DiasHastaLimite).ToList();
-            pagados = todos.Where(r => r.Pagado).OrderByDescending(r => r.FechaPago).ToList();
+            todosLosRecordatorios = resultado.Datos!;
+            pendientes = todosLosRecordatorios.Where(EsProximo).OrderBy(r => r.DiasHastaLimite).ToList();
 
             foreach (var r in pendientes)
             {
@@ -123,14 +272,134 @@ else
         cargando = false;
     }
 
+    private async Task CargarTarjetasAsync()
+    {
+        cargandoTarjetas = true;
+        var resultado = await CreditCardApi.ObtenerTodasAsync();
+        if (resultado.Exitoso)
+        {
+            tarjetas = resultado.Datos!;
+            if (tarjetas.Count > 0 && nuevoAbono.CreditCardId == Guid.Empty)
+            {
+                nuevoAbono.CreditCardId = tarjetas[0].Id;
+            }
+        }
+        cargandoTarjetas = false;
+    }
+
+    private async Task CargarAbonosAsync()
+    {
+        cargandoAbonos = true;
+        var resultado = await CardPaymentApi.ObtenerTodosAsync();
+        if (resultado.Exitoso)
+        {
+            abonos = resultado.Datos!;
+        }
+        cargandoAbonos = false;
+    }
+
     private static decimal? ParseMonto(string? valor)
         => decimal.TryParse(valor, out var monto) ? monto : null;
+
+    private async Task GuardarAbonoAsync()
+    {
+        guardandoAbono = true;
+
+        try
+        {
+            var request = new CrearCardPaymentRequest(
+                nuevoAbono.CreditCardId, nuevoAbono.Monto ?? 0, nuevoAbono.Fecha.ToUniversalTime(),
+                string.IsNullOrWhiteSpace(nuevoAbono.Nota) ? null : nuevoAbono.Nota);
+
+            var response = editandoAbonoId is null
+                ? await CardPaymentApi.CrearAsync(request)
+                : await CardPaymentApi.ActualizarAsync(editandoAbonoId.Value, request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var eraEdicion = editandoAbonoId is not null;
+                nuevoAbono = new() { CreditCardId = tarjetas.Count > 0 ? tarjetas[0].Id : Guid.Empty };
+                editandoAbonoId = null;
+                await CargarAbonosAsync();
+                await CargarTarjetasAsync();
+                await Dialogs.ToastExitoAsync(eraEdicion ? "Abono actualizado." : "Abono registrado.");
+            }
+            else
+            {
+                var mensaje = await ErrorMessageHelper.ExtraerMensajeAsync(response, "No se pudo guardar el abono. Intenta de nuevo.");
+                await Dialogs.ToastErrorAsync(mensaje);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+        finally
+        {
+            guardandoAbono = false;
+        }
+    }
+
+    private void EditarAbono(CardPaymentDto a)
+    {
+        editandoAbonoId = a.Id;
+        nuevoAbono = new NuevoAbonoModelo
+        {
+            CreditCardId = a.CreditCardId,
+            Monto = a.Monto,
+            Fecha = a.Fecha.ToLocalTime(),
+            Nota = a.Nota ?? ""
+        };
+    }
+
+    private Task CancelarEdicionAbonoAsync()
+    {
+        editandoAbonoId = null;
+        nuevoAbono = new() { CreditCardId = tarjetas.Count > 0 ? tarjetas[0].Id : Guid.Empty };
+        return Task.CompletedTask;
+    }
+
+    private async Task EliminarAbonoAsync(CardPaymentDto a)
+    {
+        var confirmado = await Dialogs.ConfirmarEliminarAsync(
+            $"¿Eliminar el abono de \"{a.NombreTarjeta}\"?",
+            "Esta acción no se puede deshacer.",
+            "Eliminar");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await CardPaymentApi.EliminarAsync(a.Id);
+            if (response.IsSuccessStatusCode)
+            {
+                if (editandoAbonoId == a.Id)
+                {
+                    await CancelarEdicionAbonoAsync();
+                }
+                await CargarAbonosAsync();
+                await CargarTarjetasAsync();
+                await Dialogs.ToastExitoAsync("Abono eliminado.");
+            }
+            else
+            {
+                await Dialogs.ToastErrorAsync("No se pudo eliminar. Intenta de nuevo.");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+    }
 
     private async Task MarcarPagadoAsync(PaymentReminderDto r)
     {
         var confirmado = await Dialogs.ConfirmarAsync(
             $"¿Marcar como pagado \"{r.NombreTarjeta}\"?",
-            $"Se registrará como pagado el ciclo con fecha límite {r.FechaLimitePago:dd/MM/yyyy}.",
+            $"Se registrará como pagado el ciclo con fecha límite {FechaFormato.Corta(r.FechaLimitePago)}.",
             "Marcar como pagado");
 
         if (!confirmado)
@@ -144,6 +413,7 @@ else
             if (response.IsSuccessStatusCode)
             {
                 await CargarAsync();
+                await CargarAbonosAsync();
                 await Dialogs.ToastExitoAsync("Pago registrado.");
             }
             else
@@ -167,9 +437,16 @@ else
 
     private static string UrgenciaTexto(PaymentReminderDto r) => r.DiasHastaLimite switch
     {
-        < 0 => $"Vencido hace {-r.DiasHastaLimite} día(s)",
         0 => "Vence hoy",
         1 => "Vence mañana",
         _ => $"Vence en {r.DiasHastaLimite} días"
     };
+
+    private class NuevoAbonoModelo
+    {
+        public Guid CreditCardId { get; set; }
+        public decimal? Monto { get; set; }
+        public DateTime Fecha { get; set; } = DateTime.Now;
+        public string Nota { get; set; } = "";
+    }
 }

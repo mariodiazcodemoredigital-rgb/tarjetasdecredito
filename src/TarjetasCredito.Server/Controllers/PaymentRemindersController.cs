@@ -13,7 +13,10 @@ namespace TarjetasCredito.Server.Controllers;
 /// PaymentReminderPushHostedService (Sprint 8) para todos los usuarios activos, no solo este.
 /// </summary>
 [Route("api/[controller]")]
-public class PaymentRemindersController(IPaymentReminderRepository recordatorios, PaymentReminderGenerationService generador) : ApiControllerBase
+public class PaymentRemindersController(
+    IPaymentReminderRepository recordatorios,
+    PaymentReminderGenerationService generador,
+    ICardPaymentRepository abonos) : ApiControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<PaymentReminderDto>>> ObtenerTodos(CancellationToken ct)
@@ -42,6 +45,22 @@ public class PaymentRemindersController(IPaymentReminderRepository recordatorios
         }
 
         await recordatorios.GuardarCambiosAsync(ct);
+
+        // Crea el abono automáticamente si hay un monto capturado, para que la utilización de la
+        // tarjeta sí refleje este pago (ver SPEC-003 "Abonos y utilización neta") — sin esto, marcar
+        // un recordatorio como pagado quedaba sin ningún efecto visible en el % de utilización.
+        if (recordatorio.MontoEstadoCuenta is > 0)
+        {
+            await abonos.CrearAsync(new CardPayment
+            {
+                UserId = UserId,
+                CreditCardId = recordatorio.CreditCardId,
+                Monto = recordatorio.MontoEstadoCuenta.Value,
+                Fecha = recordatorio.FechaPago.Value,
+                Nota = "Pago de ciclo",
+                PaymentReminderId = recordatorio.Id
+            }, ct);
+        }
         return Ok(ToDto(recordatorio, DateTime.UtcNow));
     }
 

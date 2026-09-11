@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<CreditCard> CreditCards => Set<CreditCard>();
     public DbSet<Purchase> Purchases => Set<Purchase>();
     public DbSet<PaymentReminder> PaymentReminders => Set<PaymentReminder>();
+    public DbSet<CardPayment> CardPayments => Set<CardPayment>();
     public DbSet<BuroScoreSnapshot> BuroScoreSnapshots => Set<BuroScoreSnapshot>();
     public DbSet<PushSubscriptionRecord> PushSubscriptions => Set<PushSubscriptionRecord>();
 
@@ -42,6 +43,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                 .WithMany()
                 .HasForeignKey(p => p.CreditCardId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<CardPayment>(e =>
+        {
+            e.HasIndex(p => p.UserId);
+            e.HasIndex(p => p.CreditCardId);
+            e.HasOne(p => p.Tarjeta)
+                .WithMany()
+                .HasForeignKey(p => p.CreditCardId)
+                .OnDelete(DeleteBehavior.Restrict);
+            // Trazabilidad opcional (ver SPEC-003 "Abonos y utilización neta"): si se borra el
+            // recordatorio de origen, el abono se conserva (solo pierde la referencia), nunca se borra
+            // en cascada — es dinero real que el usuario puso, no un dato derivado.
+            e.HasOne<PaymentReminder>()
+                .WithMany()
+                .HasForeignKey(p => p.PaymentReminderId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<BuroScoreSnapshot>(e => e.HasIndex(b => b.UserId));

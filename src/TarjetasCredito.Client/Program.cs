@@ -29,6 +29,7 @@ builder.Services.AddScoped<PurchaseApiService>();
 builder.Services.AddScoped<RecommendationApiService>();
 builder.Services.AddScoped<BuroApiService>();
 builder.Services.AddScoped<PaymentReminderApiService>();
+builder.Services.AddScoped<CardPaymentApiService>();
 builder.Services.AddScoped<PasskeyApiService>();
 builder.Services.AddScoped<PushNotificationApiService>();
 

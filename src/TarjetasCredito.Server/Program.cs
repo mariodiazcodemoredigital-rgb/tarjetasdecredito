@@ -81,6 +81,7 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 builder.Services.AddScoped<ICreditCardRepository, CreditCardRepository>();
 builder.Services.AddScoped<IPurchaseRepository, PurchaseRepository>();
 builder.Services.AddScoped<IPaymentReminderRepository, PaymentReminderRepository>();
+builder.Services.AddScoped<ICardPaymentRepository, CardPaymentRepository>();
 builder.Services.AddScoped<IBuroCreditoService, BuroCreditoMockService>();
 builder.Services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
 builder.Services.AddScoped<PaymentReminderGenerationService>();

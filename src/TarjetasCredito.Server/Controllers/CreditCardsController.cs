@@ -8,7 +8,7 @@ using TarjetasCredito.Shared.Dtos;
 namespace TarjetasCredito.Server.Controllers;
 
 [Route("api/[controller]")]
-public class CreditCardsController(ICreditCardRepository tarjetas, IPurchaseRepository compras) : ApiControllerBase
+public class CreditCardsController(ICreditCardRepository tarjetas, IPurchaseRepository compras, ICardPaymentRepository abonos) : ApiControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<CreditCardDto>>> ObtenerTodas(CancellationToken ct)
@@ -107,8 +107,10 @@ public class CreditCardsController(ICreditCardRepository tarjetas, IPurchaseRepo
     private async Task<decimal> CalcularUtilizacionAsync(CreditCard t, CancellationToken ct)
     {
         var ultimoCorte = CicloFacturacionHelper.UltimoCorte(t.DiaCorte, DateTime.UtcNow);
-        var saldo = await compras.ObtenerSaldoCicloVigenteAsync(UserId, t.Id, ultimoCorte, ct);
-        return t.LimiteCredito > 0 ? saldo / t.LimiteCredito : 0m;
+        var saldoCompras = await compras.ObtenerSaldoCicloVigenteAsync(UserId, t.Id, ultimoCorte, ct);
+        var totalAbonado = await abonos.ObtenerSumaCicloVigenteAsync(UserId, t.Id, ultimoCorte, ct);
+        var saldoNeto = Math.Max(0m, saldoCompras - totalAbonado);
+        return t.LimiteCredito > 0 ? saldoNeto / t.LimiteCredito : 0m;
     }
 
     private static CreditCardDto ToDto(CreditCard t, decimal utilizacion) => new(

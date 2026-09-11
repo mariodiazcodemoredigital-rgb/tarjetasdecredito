@@ -44,7 +44,7 @@ Fecha límite de pago de un ciclo = fecha de corte del ciclo + `DiasParaPago`.
 - `CreditCardId` (FK a CreditCard)
 - `Monto` (decimal)
 - `Descripcion`
-- `Categoria` (enum libre/abierta: Supermercado, Restaurantes, Transporte, Servicios, Entretenimiento, Salud, Otro)
+- `Categoria` (string, texto libre con sugerencias — ver "Categoría de compra: texto libre con sugerencias" más abajo)
 - `Fecha` (DateTime)
 - `Msi` (int, nullable) — meses sin intereses si aplica
 
@@ -59,6 +59,15 @@ Fecha límite de pago de un ciclo = fecha de corte del ciclo + `DiasParaPago`.
 - `FechaPago` (DateTime, nullable)
 - `NotificacionOptimaEnviadaUtc` / `NotificacionT3EnviadaUtc` / `NotificacionT1EnviadaUtc` (DateTime, nullable — Sprint 8) — marca de qué avisos push ya se mandaron para este recordatorio, ver [SPEC-004](SPEC_TarjetasCredito-004-Seguridad.md) "Notificaciones push".
 
+### CardPayment ("Abono" — Sprint 38)
+- `Id` (Guid)
+- `UserId` (FK, redundante con `CreditCard.UserId` — mismo criterio que `Purchase`)
+- `CreditCardId` (FK a CreditCard)
+- `Monto` (decimal)
+- `Fecha` (DateTime)
+- `Nota` (string, nullable) — texto libre opcional (ej. "pago parcial")
+- `PaymentReminderId` (Guid, nullable, FK a PaymentReminder) — se llena solo cuando el abono se creó automáticamente al marcar un recordatorio como pagado con `MontoEstadoCuenta` capturado (ver [SPEC-003](SPEC_TarjetasCredito-003-ReglasNegocio.md) "Abonos y utilización neta"); `null` cuando el usuario lo registró manualmente desde `/pagos`, sin ligarlo a un ciclo específico.
+
 ### BuroScoreSnapshot
 - `Id` (Guid)
 - `UserId` (FK)
@@ -72,6 +81,12 @@ Fecha límite de pago de un ciclo = fecha de corte del ciclo + `DiasParaPago`.
 - `UserId` (FK)
 - `Endpoint` (string, **único** — Sprint 8: re-suscribirse desde el mismo navegador actualiza la fila existente en vez de duplicarla), `P256dh`, `Auth` (campos estándar Web Push)
 - `FechaAlta` (DateTime)
+
+## Categoría de compra: texto libre con sugerencias (Sprint 37)
+
+`Purchase.Categoria` es texto libre (`string`), no un enum cerrado — el usuario puede escribir cualquier categoría, no solo elegir entre las predefinidas. La UI (`Compras.razor`) usa un `<input list>` + `<datalist>` nativo de HTML para dar la sensación de "selecciona o escribe una nueva" sin ninguna librería de JS: el `<datalist>` se llena con `CategoriasCompraSugeridas.PorDefecto` (lista fija de arranque: Supermercado, Restaurantes, Transporte, Servicios, Entretenimiento, Salud, Otro) combinada con `GET /api/purchases/categorias`, que además agrega las categorías distintas que el propio usuario ya haya escrito en compras anteriores (`IPurchaseRepository.ObtenerCategoriasUsadasAsync`) — así la lista de sugerencias "crece sola" con el uso real, sin necesidad de que el usuario use "Otro" cuando su categoría no está en la lista inicial.
+
+**Migración de datos (`CategoriaCompraTexto`)**: la columna original era un enum `int`. La migración auto-generada por EF Core (`AlterColumn` directo) habría convertido cada entero crudo a texto (`"0"`, `"1"`, ...) en vez de traducirlo al nombre real de la categoría — se reescribió a mano para agregar una columna nueva, poblarla con un `CASE` de SQL crudo que traduce cada valor entero al nombre de categoría que tenía ese enum, y solo entonces soltar la columna vieja y renombrar la nueva. Verificado insertando filas sintéticas con los 7 valores enteros posibles en la base de desarrollo real antes de aplicar la migración, confirmando que las 7 se tradujeron correctamente.
 
 ## Convenciones
 

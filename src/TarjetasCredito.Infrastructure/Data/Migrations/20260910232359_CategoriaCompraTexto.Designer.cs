@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TarjetasCredito.Infrastructure.Data;
 
@@ -10,9 +11,11 @@ using TarjetasCredito.Infrastructure.Data;
 namespace TarjetasCredito.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260910232359_CategoriaCompraTexto")]
+    partial class CategoriaCompraTexto
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -189,42 +192,6 @@ namespace TarjetasCredito.Infrastructure.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("BuroScoreSnapshots");
-                });
-
-            modelBuilder.Entity("TarjetasCredito.Domain.Entities.CardPayment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid>("CreditCardId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("Fecha")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Monto")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Nota")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("PaymentReminderId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreditCardId");
-
-                    b.HasIndex("PaymentReminderId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("CardPayments");
                 });
 
             modelBuilder.Entity("TarjetasCredito.Domain.Entities.CreditCard", b =>
@@ -579,22 +546,6 @@ namespace TarjetasCredito.Infrastructure.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("TarjetasCredito.Domain.Entities.CardPayment", b =>
-                {
-                    b.HasOne("TarjetasCredito.Domain.Entities.CreditCard", "Tarjeta")
-                        .WithMany()
-                        .HasForeignKey("CreditCardId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TarjetasCredito.Domain.Entities.PaymentReminder", null)
-                        .WithMany()
-                        .HasForeignKey("PaymentReminderId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Tarjeta");
                 });
 
             modelBuilder.Entity("TarjetasCredito.Domain.Entities.PaymentReminder", b =>

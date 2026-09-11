@@ -71,7 +71,7 @@ else
                 <div class="recordatorio-header card-interactive" style="margin-bottom:0.6rem; padding:0.4rem; border-radius:var(--radius-sm);">
                     <span class="recordatorio-color" style="background:@r.ColorHex;"></span>
                     <strong style="flex:1;">@r.NombreTarjeta</strong>
-                    <span class="badge @UrgenciaClase(r.Urgencia)">@r.FechaLimitePago.ToString("dd/MM/yyyy")</span>
+                    <span class="badge @UrgenciaClase(r.Urgencia)">@FechaFormato.Corta(r.FechaLimitePago)</span>
                 </div>
             }
             <a class="btn btn-secondary" style="width:auto;" href="pagos">Ver todos</a>
@@ -138,7 +138,10 @@ else
                 if (recordatorios.Exitoso)
                 {
                     todosLosRecordatorios = recordatorios.Datos!;
-                    proximosVencimientos = todosLosRecordatorios.Where(r => !r.Pagado).OrderBy(r => r.DiasHastaLimite).Take(3).ToList();
+                    // Solo lo que de verdad está "próximo": sin pagar y su fecha límite no ha pasado —
+                    // lo ya vencido lo cubre la sección "Mejora tu score" con la fase "⚠️ Urgente" (ver
+                    // SPEC-003 "Próximos vencimientos vs. Historial").
+                    proximosVencimientos = todosLosRecordatorios.Where(r => !r.Pagado && r.DiasHastaLimite >= 0).OrderBy(r => r.DiasHastaLimite).Take(3).ToList();
                 }
             }
         }

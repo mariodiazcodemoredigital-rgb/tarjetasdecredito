@@ -891,10 +891,34 @@ body.auth-route {
     font-family: var(--font) !important;
 }
 
+/* Ajuste "premium" del toast (Sprint 37): el default de SweetAlert2 en modo toast es angosto y no
+   controla bien el interlineado/alineación del ícono con el texto — con mensajes un poco más largos
+   (ej. "Cuenta creada. Revisa tu correo...") el texto se veía apretado/cortado (bug real reportado por
+   el usuario). Se fija un ancho cómodo, alineación a la izquierda y tamaño de ícono consistente. */
 .app-swal-toast {
     border-radius: var(--radius-md) !important;
     border: 1px solid var(--border) !important;
     box-shadow: var(--shadow) !important;
+    width: auto !important;
+    max-width: min(92vw, 26rem) !important;
+    padding: 0.85rem 1.1rem !important;
+}
+
+.app-swal-toast .swal2-title {
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    line-height: 1.45 !important;
+    text-align: left !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    white-space: normal !important;
+}
+
+.app-swal-toast .swal2-icon {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    min-width: 1.75rem !important;
+    margin: 0 0.7rem 0 0 !important;
 }
 
 .app-swal-btn {

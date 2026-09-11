@@ -61,6 +61,27 @@ Cinco fases posibles para el recordatorio vigente de una tarjeta, evaluadas con 
 
 Implementación: `RecordatorioRelevante`/`FaseDeCiclo` en `Pages/Home.razor` (privados, único consumidor por ahora — si se reusan en otro lugar, ej. el copy de las notificaciones push del Sprint 8, se deben extraer a un helper compartido en vez de duplicar la lógica).
 
+## Abonos y utilización neta (Sprint 38, 2026-09-10)
+
+**Problema real reportado por el usuario**: registró un pago a una tarjeta ("Marcar como pagado" en un recordatorio) y la utilización mostrada en Tarjetas/Dashboard no se movió. Causa raíz: `CreditCardsController.CalcularUtilizacionAsync` solo sumaba compras del ciclo vigente (`IPurchaseRepository.ObtenerSaldoCicloVigenteAsync`) — no existía ningún concepto de "pago/abono" que restara de ese saldo. "Marcar como pagado" solo cambiaba el booleano `Pagado` de un `PaymentReminder`, sin efecto en el cálculo.
+
+**Decisión**: nueva entidad `CardPayment` ("abono") — ver [SPEC-002](SPEC_TarjetasCredito-002-BaseDeDatos.md) — que representa dinero puesto hacia una tarjeta, independiente de `Purchase` (que suma) y de "marcar un recordatorio como pagado" (que hoy solo es una bandera informativa por ciclo).
+
+**Fórmula de utilización** (`CreditCardsController.CalcularUtilizacionAsync`):
+```
+saldoCompras = suma de Purchase.Monto con Fecha >= último corte
+totalAbonado = suma de CardPayment.Monto con Fecha >= último corte
+saldoNeto = max(0, saldoCompras - totalAbonado)
+utilización = saldoNeto / LimiteCredito
+```
+Un abono resta del saldo del ciclo vigente en cuanto se registra, sin importar si es antes o después del corte, y se pueden registrar tantos como se quiera dentro del mismo ciclo — cada uno baja la utilización un poco más (responde directo al caso "pago parcial, y luego quiero abonar otra vez para ir disminuyendo"). `saldoNeto` nunca es negativo (un abono de más dentro de un ciclo con poca compra deja la utilización en 0%, no negativa).
+
+**"Marcar como pagado" ahora también crea un abono**: `PaymentRemindersController.MarcarPagado`, si recibe (o ya tenía guardado) un `MontoEstadoCuenta`, además de marcar `Pagado=true` crea automáticamente un `CardPayment` por ese monto (`Fecha` = `FechaPago`, `PaymentReminderId` = el recordatorio, para trazabilidad). Así el flujo que el usuario ya usaba (Historial → "Marcar como pagado") queda corregido sin que tenga que aprender una pantalla nueva. Si no se captura monto, no se crea abono — igual que hoy, sin dato no hay nada que restar.
+
+**Registro manual de abonos**: sección "Abonos" en `/pagos` (`Recordatorios.razor`), independiente de los recordatorios por ciclo — para pagos parciales sueltos que el usuario quiera llevar aparte sin necesidad de "cerrar" un recordatorio. Mismo patrón CRUD que `Compras.razor` (crear/editar/eliminar).
+
+**Simplificación conocida, aceptada a propósito (no es un bug)**: esta app no modela un "saldo pendiente que rueda mes a mes" (revolving balance) — la utilización ya ignoraba, desde antes de este sprint, cualquier deuda vieja no pagada de un ciclo cerrado (solo mira "lo comprado desde el último corte"). Un abono fechado hoy para saldar una deuda de un ciclo cerrado hace 2+ meses se resta igual del ciclo **vigente** (no existe ningún "saldo viejo" separado del cual restarlo), lo cual puede mostrar una utilización más baja de lo estrictamente correcto durante ese caso borde. Es la misma limitación ya documentada en "un solo ciclo a la vez" (Sprint 35) llevada a su consecuencia lógica en abonos — modelar el saldo pendiente completo que rueda entre ciclos queda como posible sprint futuro si el usuario lo pide.
+
 ## Consulta y mejora de buró de crédito
 
 **Decisión**: v1 usa `IBuroCreditoService` con implementación mock (`BuroCreditoMockService`) que genera un score simulado realista (300-850, distribución centrada en 650-720) y una lista de factores (ej. "Utilización de crédito alta en 2 tarjetas", "Antigüedad de crédito corta") derivados de los datos reales que el usuario ya capturó en la app (utilización actual, historial de pagos registrados en `PaymentReminder`), para que las recomendaciones sean coherentes aunque el score en sí sea simulado. La UI deja explícito en todo momento que el score es una **estimación simulada**, no una consulta real a un buró, hasta que se conecte un proveedor real.

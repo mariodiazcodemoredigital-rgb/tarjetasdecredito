@@ -30,7 +30,7 @@ else if (tarjetas.Count == 0)
 else
 {
     <div class="card entrada-suave">
-        <h3>Registrar compra</h3>
+        <h3>@(editandoId is null ? "Registrar compra" : "Editar compra")</h3>
 
         <EditForm Model="modelo" OnValidSubmit="GuardarAsync">
             <DataAnnotationsValidator />
@@ -48,7 +48,9 @@ else
                 <label>Monto</label>
                 <div class="input-currency">
                     <span class="input-currency-prefix">$</span>
-                    <InputNumber @bind-Value="modelo.Monto" />
+                    <input type="number" min="0.01" step="0.01" placeholder="0.00"
+                           value="@modelo.Monto?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                           @onchange="@(e => modelo.Monto = ParseMonto(e.Value?.ToString()))" />
                 </div>
             </div>
             <div class="field">
@@ -57,12 +59,13 @@ else
             </div>
             <div class="field">
                 <label>Categoría</label>
-                <InputSelect @bind-Value="modelo.Categoria">
-                    @foreach (var c in Enum.GetValues<CategoriaCompraDto>())
+                <input list="categorias-sugeridas" @bind="modelo.Categoria" @bind:event="oninput" placeholder="Elige o escribe una nueva" />
+                <datalist id="categorias-sugeridas">
+                    @foreach (var cat in categoriasSugeridas)
                     {
-                        <option value="@c">@c</option>
+                        <option value="@cat"></option>
                     }
-                </InputSelect>
+                </datalist>
             </div>
             <div class="field">
                 <label>Fecha</label>
@@ -73,7 +76,15 @@ else
                 <InputNumber @bind-Value="modelo.Msi" />
             </div>
 
-            <button class="btn" type="submit" disabled="@guardando">@(guardando ? "Guardando..." : "Registrar compra")</button>
+            <div style="display:flex; gap:0.6rem;">
+                <button class="btn" type="submit" disabled="@(guardando || modelo.Monto is null or <= 0)">
+                    @(guardando ? "Guardando..." : (editandoId is null ? "Registrar compra" : "Guardar cambios"))
+                </button>
+                @if (editandoId is not null)
+                {
+                    <button class="btn btn-secondary" type="button" style="width:auto;" @onclick="CancelarEdicionAsync">Cancelar</button>
+                }
+            </div>
         </EditForm>
     </div>
 
@@ -97,9 +108,13 @@ else
             <div class="card compra-item card-interactive entrada-suave">
                 <div>
                     <strong>@c.Descripcion</strong>
-                    <div class="text-muted">@c.NombreTarjeta · @c.Categoria · @c.Fecha.ToString("dd/MM/yyyy")</div>
+                    <div class="text-muted">@c.NombreTarjeta · @c.Categoria · @FechaFormato.Corta(c.Fecha)</div>
                 </div>
-                <div class="compra-item-monto">$@c.Monto.ToString("N2")</div>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <div class="compra-item-monto">$@c.Monto.ToString("N2")</div>
+                    <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAsync(c)">✏️</button>
+                    <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAsync(c)">🗑️</button>
+                </div>
             </div>
         }
     }
@@ -108,6 +123,7 @@ else
 @code {
     private List<CreditCardDto> tarjetas = [];
     private List<PurchaseDto> compras = [];
+    private List<string> categoriasSugeridas = [];
     private bool cargandoTarjetas = true;
     private bool sinConexionTarjetas;
     private bool errorServidorTarjetas;
@@ -115,12 +131,14 @@ else
     private bool sinConexionHistorial;
     private bool errorServidorHistorial;
     private bool guardando;
+    private Guid? editandoId;
     private NuevaCompraModelo modelo = new();
 
     protected override async Task OnInitializedAsync()
     {
         await CargarTarjetasAsync();
         await CargarComprasAsync();
+        await CargarCategoriasAsync();
     }
 
     private async Task CargarTarjetasAsync()
@@ -167,6 +185,17 @@ else
         cargandoHistorial = false;
     }
 
+    private async Task CargarCategoriasAsync()
+    {
+        // Secundario: si falla, el datalist simplemente queda vacío — no bloquea registrar la compra
+        // (el usuario puede seguir escribiendo la categoría a mano).
+        var resultado = await PurchaseApi.ObtenerCategoriasAsync();
+        if (resultado.Exitoso)
+        {
+            categoriasSugeridas = resultado.Datos!;
+        }
+    }
+
     private async Task GuardarAsync()
     {
         guardando = true;
@@ -174,19 +203,26 @@ else
         try
         {
             var request = new CrearPurchaseRequest(
-                modelo.CreditCardId, modelo.Monto, modelo.Descripcion, modelo.Categoria,
+                modelo.CreditCardId, modelo.Monto ?? 0, modelo.Descripcion,
+                string.IsNullOrWhiteSpace(modelo.Categoria) ? "Otro" : modelo.Categoria,
                 modelo.Fecha.ToUniversalTime(), modelo.Msi);
 
-            var response = await PurchaseApi.CrearAsync(request);
+            var response = editandoId is null
+                ? await PurchaseApi.CrearAsync(request)
+                : await PurchaseApi.ActualizarAsync(editandoId.Value, request);
+
             if (response.IsSuccessStatusCode)
             {
+                var eraEdicion = editandoId is not null;
                 modelo = new() { CreditCardId = tarjetas[0].Id };
+                editandoId = null;
                 await CargarComprasAsync();
-                await Dialogs.ToastExitoAsync("Compra registrada.");
+                await CargarCategoriasAsync();
+                await Dialogs.ToastExitoAsync(eraEdicion ? "Compra actualizada." : "Compra registrada.");
             }
             else
             {
-                var mensaje = await ErrorMessageHelper.ExtraerMensajeAsync(response, "No se pudo registrar la compra. Intenta de nuevo.");
+                var mensaje = await ErrorMessageHelper.ExtraerMensajeAsync(response, "No se pudo guardar la compra. Intenta de nuevo.");
                 await Dialogs.ToastErrorAsync(mensaje);
             }
         }
@@ -200,12 +236,71 @@ else
         }
     }
 
+    private void EditarAsync(PurchaseDto c)
+    {
+        editandoId = c.Id;
+        modelo = new NuevaCompraModelo
+        {
+            CreditCardId = c.CreditCardId,
+            Monto = c.Monto,
+            Descripcion = c.Descripcion,
+            Categoria = c.Categoria,
+            Fecha = c.Fecha.ToLocalTime(),
+            Msi = c.Msi
+        };
+    }
+
+    private Task CancelarEdicionAsync()
+    {
+        editandoId = null;
+        modelo = new() { CreditCardId = tarjetas[0].Id };
+        return Task.CompletedTask;
+    }
+
+    private async Task EliminarAsync(PurchaseDto c)
+    {
+        var confirmado = await Dialogs.ConfirmarEliminarAsync(
+            $"¿Eliminar \"{c.Descripcion}\"?",
+            "Esta acción no se puede deshacer.",
+            "Eliminar");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await PurchaseApi.EliminarAsync(c.Id);
+            if (response.IsSuccessStatusCode)
+            {
+                if (editandoId == c.Id)
+                {
+                    await CancelarEdicionAsync();
+                }
+                await CargarComprasAsync();
+                await Dialogs.ToastExitoAsync("Compra eliminada.");
+            }
+            else
+            {
+                await Dialogs.ToastErrorAsync("No se pudo eliminar. Intenta de nuevo.");
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
+        }
+    }
+
+    private static decimal? ParseMonto(string? valor)
+        => decimal.TryParse(valor, out var monto) ? monto : null;
+
     private class NuevaCompraModelo
     {
         public Guid CreditCardId { get; set; }
-        public decimal Monto { get; set; }
+        public decimal? Monto { get; set; }
         public string Descripcion { get; set; } = "";
-        public CategoriaCompraDto Categoria { get; set; } = CategoriaCompraDto.Otro;
+        public string Categoria { get; set; } = "Otro";
         public DateTime Fecha { get; set; } = DateTime.Now;
         public int? Msi { get; set; }
     }
