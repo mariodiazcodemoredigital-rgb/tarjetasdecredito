@@ -1,14 +1,12 @@
 @* Campo de monto con máscara de moneda en vivo (separador de miles) — ver SPEC-005 "Máscara de
-   moneda". Sincroniza el valor con Blazor solo en blur/change (mismo criterio que el resto de los
-   campos de Monto nativos de la app), la máscara en vivo mientras se escribe la maneja currencyMask.js
-   directamente sobre el DOM. *@
-@inject IJSRuntime JS
+   moneda". Formatea en C#, en cada tecla (Services/MontoFormato), igual que el monto del Dashboard y
+   el límite de crédito de TarjetaFormCard — no usa JS (ver el bug real que tenía la versión anterior
+   basada en currencyMask.js, documentado en SPEC-005). *@
+@using TarjetasCredito.Client.Services
 
 <div class="input-currency">
     <span class="input-currency-prefix">$</span>
-    <input type="text" inputmode="decimal" placeholder="@Placeholder" @ref="_inputRef"
-           value="@Value?.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)"
-           @onchange="OnChangeAsync" disabled="@Disabled" />
+    <input type="text" inputmode="decimal" placeholder="@Placeholder" value="@_texto" @oninput="OnInputAsync" disabled="@Disabled" />
 </div>
 
 @code {
@@ -17,22 +15,28 @@
     [Parameter] public string Placeholder { get; set; } = "0.00";
     [Parameter] public bool Disabled { get; set; }
 
-    private ElementReference _inputRef;
+    private string _texto = "";
+    private decimal? _ultimoValorPropio;
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    /// <summary>Solo resincroniza el texto mostrado cuando <see cref="Value"/> cambió por una causa
+    /// EXTERNA (ej. el padre entra en modo edición y precarga un monto existente) — nunca por un
+    /// re-render cualquiera del padre mientras el usuario está escribiendo, que es justo el bug real
+    /// que tenía la versión anterior (bindear <c>value</c> directo al parámetro re-formateaba y
+    /// sobrescribía lo que el usuario ya había tecleado en cuanto algo más disparaba un render).</summary>
+    protected override void OnParametersSet()
     {
-        if (firstRender)
+        if (Value != _ultimoValorPropio)
         {
-            await JS.InvokeVoidAsync("currencyMask.attach", _inputRef);
+            _ultimoValorPropio = Value;
+            _texto = Value?.ToString("N2", System.Globalization.CultureInfo.InvariantCulture) ?? "";
         }
     }
 
-    private async Task OnChangeAsync(ChangeEventArgs e)
+    private async Task OnInputAsync(ChangeEventArgs e)
     {
-        var texto = e.Value?.ToString()?.Replace(",", "");
-        Value = decimal.TryParse(texto, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var monto)
-            ? monto
-            : null;
+        _texto = MontoFormato.EnVivo(e.Value?.ToString() ?? "");
+        _ultimoValorPropio = MontoFormato.AValor(_texto);
+        Value = _ultimoValorPropio;
         await ValueChanged.InvokeAsync(Value);
     }
 }

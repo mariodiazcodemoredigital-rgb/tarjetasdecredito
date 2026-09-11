@@ -89,39 +89,57 @@ else
     }
     else
     {
-        <div class="compras-grid-tarjetas">
-            @foreach (var t in tarjetas)
-            {
-                var comprasDeLaTarjeta = compras.Where(c => c.CreditCardId == t.Id).ToList();
-                <div class="compras-grupo-tarjeta entrada-suave">
-                    <CreditCardVisual Tarjeta="t" />
+        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+            <div class="field" style="max-width:22rem; flex:1; min-width:12rem;">
+                <label>Tarjeta a consultar</label>
+                <select @bind="tarjetaFiltroId" @bind:after="ResetearPagina">
+                    <option value="todas">Ver todos</option>
+                    @foreach (var t in tarjetas)
+                    {
+                        <option value="@t.Id">@t.Nombre</option>
+                    }
+                </select>
+            </div>
+            <div class="field" style="max-width:14rem; flex:1; min-width:10rem;">
+                <label>Periodo</label>
+                <select @bind="periodoFiltro" @bind:after="ResetearPagina">
+                    <option value="mes">Mes actual</option>
+                    <option value="ultimoCorte">Último corte</option>
+                </select>
+            </div>
+        </div>
 
-                    @if (comprasDeLaTarjeta.Count == 0)
-                    {
-                        <p class="text-muted" style="margin-top:0.85rem;">Aún no hay compras en esta tarjeta.</p>
-                    }
-                    else
-                    {
-                        <div class="compras-grupo-lista">
-                            @foreach (var c in comprasDeLaTarjeta)
-                            {
-                                <div class="card compra-item card-interactive entrada-suave @(editandoId == c.Id ? "item-en-edicion" : "")">
-                                    <div>
-                                        <strong>@c.Descripcion</strong>
-                                        <div class="text-muted">@c.Categoria · @FechaFormato.Corta(c.Fecha)</div>
-                                    </div>
-                                    <div style="display:flex; align-items:center; gap:0.5rem;">
-                                        <div class="compra-item-monto">$@c.Monto.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</div>
-                                        <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAsync(c)">✏️</button>
-                                        <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAsync(c)">🗑️</button>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
+        @if (ComprasFiltradas.Count == 0)
+        {
+            <EstadoVacio Icono="🧾" Titulo="Aún no hay compras"
+                         Descripcion="@(compras.Count == 0 ? "Las compras que registres arriba van a aparecer aquí, ordenadas por fecha." : "No hay compras que coincidan con estos filtros. Prueba cambiar la tarjeta o el periodo.")" />
+        }
+        else
+        {
+            @foreach (var c in ComprasPaginadas)
+            {
+                <div class="card compra-item card-interactive entrada-suave @(editandoId == c.Id ? "item-en-edicion" : "")">
+                    <div>
+                        <strong>@c.Descripcion</strong>
+                        <div class="text-muted">@c.NombreTarjeta · @c.Categoria · @FechaFormato.Corta(c.Fecha)</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <div class="compra-item-monto">$@c.Monto.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</div>
+                        <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAsync(c)">✏️</button>
+                        <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAsync(c)">🗑️</button>
+                    </div>
                 </div>
             }
-        </div>
+
+            @if (TotalPaginas > 1)
+            {
+                <div style="display:flex; align-items:center; justify-content:center; gap:1rem; margin-top:1rem;">
+                    <button class="btn btn-secondary" style="width:auto;" disabled="@(paginaActual <= 1)" @onclick="() => paginaActual--">← Anterior</button>
+                    <span class="text-muted">Página @paginaActual de @TotalPaginas</span>
+                    <button class="btn btn-secondary" style="width:auto;" disabled="@(paginaActual >= TotalPaginas)" @onclick="() => paginaActual++">Siguiente →</button>
+                </div>
+            }
+        }
     }
 }
 
@@ -138,6 +156,52 @@ else
     private bool guardando;
     private Guid? editandoId;
     private NuevaCompraModelo modelo = new();
+    private string tarjetaFiltroId = "todas";
+    private string periodoFiltro = "mes";
+    private int paginaActual = 1;
+    private const int TamanoPagina = 10;
+
+    /// <summary>Combina el filtro de tarjeta con el de periodo (ver SPEC-005 "Filtro de periodo y
+    /// paginación"). "Último corte" mira el `DiaCorte` de la tarjeta de CADA compra — con "Ver todos"
+    /// puede haber tarjetas con días de corte distintos, así que no hay un solo corte global.</summary>
+    private List<PurchaseDto> ComprasFiltradas
+    {
+        get
+        {
+            var query = tarjetaFiltroId == "todas" ? compras : compras.Where(c => c.CreditCardId.ToString() == tarjetaFiltroId);
+            var hoy = DateTime.Now;
+
+            query = periodoFiltro == "ultimoCorte"
+                ? query.Where(c => c.Fecha >= UltimoCorteDeLaTarjeta(c.CreditCardId, hoy))
+                : query.Where(c => c.Fecha.Month == hoy.Month && c.Fecha.Year == hoy.Year);
+
+            return query.OrderByDescending(c => c.Fecha).ToList();
+        }
+    }
+
+    private int TotalPaginas => Math.Max(1, (int)Math.Ceiling(ComprasFiltradas.Count / (double)TamanoPagina));
+
+    private List<PurchaseDto> ComprasPaginadas
+    {
+        get
+        {
+            var filtradas = ComprasFiltradas;
+            var totalPaginas = Math.Max(1, (int)Math.Ceiling(filtradas.Count / (double)TamanoPagina));
+            if (paginaActual > totalPaginas)
+            {
+                paginaActual = totalPaginas;
+            }
+            return filtradas.Skip((paginaActual - 1) * TamanoPagina).Take(TamanoPagina).ToList();
+        }
+    }
+
+    private DateTime UltimoCorteDeLaTarjeta(Guid creditCardId, DateTime hoy)
+    {
+        var tarjeta = tarjetas.FirstOrDefault(t => t.Id == creditCardId);
+        return tarjeta is null ? DateTime.MinValue : CicloFacturacionCliente.UltimoCorte(tarjeta.DiaCorte, hoy);
+    }
+
+    private void ResetearPagina() => paginaActual = 1;
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,7 +220,7 @@ else
         if (resultado.Exitoso)
         {
             tarjetas = resultado.Datos!;
-            if (tarjetas.Count > 0)
+            if (tarjetas.Count > 0 && modelo.CreditCardId == Guid.Empty)
             {
                 modelo.CreditCardId = tarjetas[0].Id;
             }
@@ -223,6 +287,10 @@ else
                 editandoId = null;
                 await CargarComprasAsync();
                 await CargarCategoriasAsync();
+                // Registrar/editar/eliminar una compra cambia el saldo disponible de la tarjeta — hay
+                // que refrescar `tarjetas` para que el resto de la página (y cualquier otra que dependa
+                // de este mismo servicio) no se quede mostrando el Disponible/Utilización de antes.
+                await CargarTarjetasAsync();
                 await Dialogs.ToastExitoAsync(eraEdicion ? "Compra actualizada." : "Compra registrada.");
             }
             else
@@ -286,6 +354,7 @@ else
                     await CancelarEdicionAsync();
                 }
                 await CargarComprasAsync();
+                await CargarTarjetasAsync();
                 await Dialogs.ToastExitoAsync("Compra eliminada.");
             }
             else

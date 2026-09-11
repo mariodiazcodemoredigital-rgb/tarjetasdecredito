@@ -709,26 +709,6 @@ body.auth-route {
 .recordatorio-pagado { opacity: 0.75; }
 
 /* Historial de compras — ver SPEC-005 "Elevación premium de pantallas internas" */
-/* Historial de compras agrupado por tarjeta (Sprint 41) — grilla responsiva de 2 columnas (12/6 al
-   estilo Bootstrap que pidió el usuario) desde escritorio, 1 columna en móvil; con 1 sola tarjeta
-   registrada, CSS Grid ya la deja ocupando solo la primera celda sin necesidad de código especial. */
-.compras-grid-tarjetas {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-    margin-top: 1rem;
-}
-
-@media (min-width: 992px) {
-    .compras-grid-tarjetas {
-        grid-template-columns: repeat(2, 1fr);
-        align-items: start;
-    }
-}
-
-.compras-grupo-tarjeta { display: flex; flex-direction: column; }
-.compras-grupo-lista { margin-top: 0.85rem; }
-
 .compra-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 
 /* Ítem que se está editando ahora mismo (Sprint 40) — junto con el scroll al formulario al hacer clic
