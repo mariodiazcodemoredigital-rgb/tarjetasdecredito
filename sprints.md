@@ -363,7 +363,13 @@ Convención: `[ ]` pendiente, `[~]` en progreso, `[x]` completado.
 - [x] Paginación de 10 compras por página sobre el resultado ya filtrado (tarjeta + periodo), con "Anterior"/"Siguiente" — cambiar cualquier filtro reinicia a la página 1 (`@bind:after`).
 - [x] Documentado en [SPEC-005](docs/specs/SPEC_TarjetasCredito-005-UI.md) "Filtro de periodo y paginación".
 - [x] `TarjetasCredito.Client` compila limpio (0 warnings/errores) de forma aislada.
-- [ ] **`TarjetasCredito.Server` no se pudo compilar/probar en navegador en esta sesión**: la sesión de Visual Studio del usuario tenía el proceso del Server corriendo en ese momento, bloqueando el `.dll` de salida (`MSB3027`) — no es un error de código, es un conflicto de archivo por tener la app corriendo desde VS en paralelo (ver memoria del proyecto). Pendiente que el usuario lo pruebe en su propia instancia corriendo, o avise cuando pueda liberar el proceso para una verificación de punta a punta en esta sesión.
+- [x] Verificado en navegador en la sesión siguiente (el bloqueo de archivo de Visual Studio ya se había liberado) — ver Sprint 44, que encontró y corrigió un hueco real en este mismo filtro.
+
+## Sprint 44 — Historial de Compras: opción "Elegir mes" (bug real de un mes cerrado invisible) ✅ (2026-09-11)
+- [x] **Bug real reportado por el usuario probando con datos reales**: registró una compra fechada el 26 de agosto (mes ya cerrado) y no la encontraba en ningún lado — "no me registró la compra, no descontó el disponible". Reproducido exactamente: la compra **sí se guardó** (confirmado vía `GET /api/purchases` directo, $500 "Compra vieja" con fecha correcta), pero ni "Mes actual" ni "Último corte" pueden mostrar algo de un mes ya cerrado — ambos filtros de Sprint 43 excluían por diseño cualquier cosa fuera del ciclo/mes en curso, sin ninguna forma de ver hacia atrás. El disponible sin cambios es comportamiento ya documentado y esperado (la utilización solo cuenta el ciclo vigente, ver [SPEC-003](docs/specs/SPEC_TarjetasCredito-003-ReglasNegocio.md) "Abonos y utilización neta") — no hacía falta corregir eso, solo explicarlo.
+- [x] Nueva tercera opción de Periodo, "Elegir mes": revela selectores de mes (español) y año (poblado con los años que realmente tienen compras, más el año actual — mismo patrón que `Recordatorios.razor`), filtra por `Fecha.Month`/`Fecha.Year` exactos sin restricción de ciclo.
+- [x] Documentado en [SPEC-005](docs/specs/SPEC_TarjetasCredito-005-UI.md) "Filtro de periodo y paginación" (ampliada).
+- [x] Compila limpio. Probado en navegador con el mismo caso exacto reportado: tarjeta con corte día 1, compra fechada 26 de agosto, invisible en "Mes actual"/"Último corte", visible eligiendo "Agosto 2026".
 
 ## Backlog futuro (sin sprint asignado)
 - [ ] Integración real con proveedor de buró de crédito (requiere credenciales del usuario).

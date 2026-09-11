@@ -105,8 +105,30 @@ else
                 <select @bind="periodoFiltro" @bind:after="ResetearPagina">
                     <option value="mes">Mes actual</option>
                     <option value="ultimoCorte">Último corte</option>
+                    <option value="especifico">Elegir mes</option>
                 </select>
             </div>
+            @if (periodoFiltro == "especifico")
+            {
+                <div class="field" style="max-width:10rem; flex:1; min-width:8rem;">
+                    <label>Mes</label>
+                    <select @bind="mesEspecifico" @bind:after="ResetearPagina">
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@NombresMeses[m - 1]</option>
+                        }
+                    </select>
+                </div>
+                <div class="field" style="max-width:8rem; flex:1; min-width:6rem;">
+                    <label>Año</label>
+                    <select @bind="anioEspecifico" @bind:after="ResetearPagina">
+                        @foreach (var a in AniosDisponibles)
+                        {
+                            <option value="@a">@a</option>
+                        }
+                    </select>
+                </div>
+            }
         </div>
 
         @if (ComprasFiltradas.Count == 0)
@@ -158,12 +180,30 @@ else
     private NuevaCompraModelo modelo = new();
     private string tarjetaFiltroId = "todas";
     private string periodoFiltro = "mes";
+    private int mesEspecifico = DateTime.Now.Month;
+    private int anioEspecifico = DateTime.Now.Year;
     private int paginaActual = 1;
     private const int TamanoPagina = 10;
 
+    private static readonly string[] NombresMeses =
+    [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+
+    private List<int> AniosDisponibles => compras
+        .Select(c => c.Fecha.Year)
+        .Append(DateTime.Now.Year)
+        .Distinct()
+        .OrderByDescending(a => a)
+        .ToList();
+
     /// <summary>Combina el filtro de tarjeta con el de periodo (ver SPEC-005 "Filtro de periodo y
     /// paginación"). "Último corte" mira el `DiaCorte` de la tarjeta de CADA compra — con "Ver todos"
-    /// puede haber tarjetas con días de corte distintos, así que no hay un solo corte global.</summary>
+    /// puede haber tarjetas con días de corte distintos, así que no hay un solo corte global.
+    /// "Elegir mes" (Sprint 44) es la única forma de ver una compra de un ciclo ya cerrado — "Mes
+    /// actual"/"Último corte" la excluyen por diseño, y eso se reportó como bug ("no se registró la
+    /// compra") cuando en realidad sí estaba guardada, solo no había manera de verla.</summary>
     private List<PurchaseDto> ComprasFiltradas
     {
         get
@@ -171,9 +211,12 @@ else
             var query = tarjetaFiltroId == "todas" ? compras : compras.Where(c => c.CreditCardId.ToString() == tarjetaFiltroId);
             var hoy = DateTime.Now;
 
-            query = periodoFiltro == "ultimoCorte"
-                ? query.Where(c => c.Fecha >= UltimoCorteDeLaTarjeta(c.CreditCardId, hoy))
-                : query.Where(c => c.Fecha.Month == hoy.Month && c.Fecha.Year == hoy.Year);
+            query = periodoFiltro switch
+            {
+                "ultimoCorte" => query.Where(c => c.Fecha >= UltimoCorteDeLaTarjeta(c.CreditCardId, hoy)),
+                "especifico" => query.Where(c => c.Fecha.Month == mesEspecifico && c.Fecha.Year == anioEspecifico),
+                _ => query.Where(c => c.Fecha.Month == hoy.Month && c.Fecha.Year == hoy.Year)
+            };
 
             return query.OrderByDescending(c => c.Fecha).ToList();
         }
