@@ -6,6 +6,7 @@
 @inject CreditCardApiService CreditCardApi
 @inject CardPaymentApiService CardPaymentApi
 @inject DialogService Dialogs
+@inject IJSRuntime JS
 
 <PageTitle>Recordatorios de pago</PageTitle>
 
@@ -17,7 +18,7 @@
 
 @if (!cargandoTarjetas && tarjetas.Count > 0)
 {
-    <div class="card entrada-suave">
+    <div class="card entrada-suave" id="formulario-abono">
         <h3>@(editandoAbonoId is null ? "Registrar abono" : "Editar abono")</h3>
         <p class="text-muted">Un pago parcial o total a una tarjeta, independiente de marcar un recordatorio como pagado — baja tu utilización de inmediato.</p>
 
@@ -64,7 +65,7 @@
             <h4 style="margin-top:1.25rem;">Abonos registrados</h4>
             @foreach (var a in abonos)
             {
-                <div class="card compra-item card-interactive entrada-suave">
+                <div class="card compra-item card-interactive entrada-suave @(editandoAbonoId == a.Id ? "item-en-edicion" : "")">
                     <div>
                         <strong>@a.NombreTarjeta</strong>
                         <div class="text-muted">@FechaFormato.Corta(a.Fecha)@(string.IsNullOrWhiteSpace(a.Nota) ? "" : $" · {a.Nota}")</div>
@@ -331,7 +332,7 @@ else
         }
     }
 
-    private void EditarAbono(CardPaymentDto a)
+    private async Task EditarAbono(CardPaymentDto a)
     {
         editandoAbonoId = a.Id;
         nuevoAbono = new NuevoAbonoModelo
@@ -341,6 +342,8 @@ else
             Fecha = a.Fecha.ToLocalTime(),
             Nota = a.Nota ?? ""
         };
+
+        await JS.InvokeVoidAsync("domUtils.scrollIntoView", "formulario-abono");
     }
 
     private Task CancelarEdicionAbonoAsync()

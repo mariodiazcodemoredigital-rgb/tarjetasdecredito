@@ -70,9 +70,10 @@ public static class MotorRecomendacionTarjeta
             .ThenBy(o => o.UtilizacionResultante)
             .First();
 
+        var fechaLimiteTexto = FechaTextoHelper.Corta(mejor.FechaLimitePago);
         var explicacion = advertencia
-            ? $"Se recomienda {mejor.Tarjeta.Nombre} porque, aunque toda tu utilización quedaría por encima del 30% recomendado, es la que menor utilización resultante tendría ({mejor.UtilizacionResultante:P0}) y te da hasta el {mejor.FechaLimitePago:dd/MM/yyyy} para pagar."
-            : $"Se recomienda {mejor.Tarjeta.Nombre}: tu corte más reciente fue hace {mejor.DiasDesdeCorte} días, lo que te da el mayor plazo — puedes pagar hasta el {mejor.FechaLimitePago:dd/MM/yyyy} ({mejor.DiasHastaPago} días) sin generar intereses, con una utilización resultante de {mejor.UtilizacionResultante:P0}.";
+            ? $"Se recomienda {mejor.Tarjeta.Nombre} porque, aunque toda tu utilización quedaría por encima del 30% recomendado, es la que menor utilización resultante tendría ({mejor.UtilizacionResultante:P0}) y te da hasta el {fechaLimiteTexto} para pagar."
+            : $"Se recomienda {mejor.Tarjeta.Nombre}: tu corte más reciente fue hace {mejor.DiasDesdeCorte} días, lo que te da el mayor plazo — puedes pagar hasta el {fechaLimiteTexto} ({mejor.DiasHastaPago} días) sin generar intereses, con una utilización resultante de {mejor.UtilizacionResultante:P0}.";
 
         return new ResultadoRecomendacion(mejor.Tarjeta, mejor.FechaLimitePago, mejor.UtilizacionResultante, explicacion, advertencia, opciones);
     }

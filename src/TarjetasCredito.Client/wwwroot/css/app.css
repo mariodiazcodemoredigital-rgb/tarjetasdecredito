@@ -318,9 +318,47 @@ a { color: var(--primary); text-decoration: none; }
 /* Feedback táctil al presionar cualquier botón (micro-interacción, Sprint 9). */
 .btn:active:not(:disabled) { transform: scale(0.97); }
 
-.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Deshabilitado con estilo plano/gris propio (Sprint 40) — no solo el gradiente con menos opacidad:
+   el usuario reportó que el botón habilitado "parecía deshabilitado" porque la diferencia entre ambos
+   estados (gradiente vivo vs. gradiente al 60% de opacidad) era demasiado sutil para notarla de un
+   vistazo. Quitar el degradado por completo en el estado deshabilitado (fondo plano `--surface-2`,
+   texto atenuado) hace la distinción inconfundible sin tocar el estado habilitado. */
+.btn:disabled {
+    background: var(--surface-2);
+    color: var(--text-muted);
+    opacity: 1;
+    cursor: not-allowed;
+    box-shadow: none;
+}
 .btn-secondary { background: var(--surface-2); color: var(--text); }
 .btn-danger { background: var(--danger); color: #fff; }
+
+/* Combobox propio (Sprint 40) — ver Components/InputCombo.razor. */
+.input-combo { position: relative; }
+.input-combo-lista {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0.35rem;
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+}
+.input-combo-lista li {
+    padding: 0.55rem 0.7rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.92rem;
+    color: var(--text);
+}
+.input-combo-lista li:hover { background: var(--surface-2); }
 
 .field { margin-bottom: 1rem; }
 .field label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-muted); }
@@ -671,7 +709,34 @@ body.auth-route {
 .recordatorio-pagado { opacity: 0.75; }
 
 /* Historial de compras — ver SPEC-005 "Elevación premium de pantallas internas" */
+/* Historial de compras agrupado por tarjeta (Sprint 41) — grilla responsiva de 2 columnas (12/6 al
+   estilo Bootstrap que pidió el usuario) desde escritorio, 1 columna en móvil; con 1 sola tarjeta
+   registrada, CSS Grid ya la deja ocupando solo la primera celda sin necesidad de código especial. */
+.compras-grid-tarjetas {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+@media (min-width: 992px) {
+    .compras-grid-tarjetas {
+        grid-template-columns: repeat(2, 1fr);
+        align-items: start;
+    }
+}
+
+.compras-grupo-tarjeta { display: flex; flex-direction: column; }
+.compras-grupo-lista { margin-top: 0.85rem; }
+
 .compra-item { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+
+/* Ítem que se está editando ahora mismo (Sprint 40) — junto con el scroll al formulario al hacer clic
+   en editar, deja claro cuál fila de la lista corresponde al formulario abierto arriba. */
+.item-en-edicion {
+    border: 2px solid var(--primary);
+    background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
 .compra-item-monto { font-weight: 700; white-space: nowrap; }
 
 /* Buró de crédito — ver SPEC-005 */

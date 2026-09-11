@@ -32,13 +32,14 @@
         </div>
         <div class="field">
             <label>Últimos 4 dígitos</label>
-            <input @bind="modelo.UltimosCuatroDigitos" @bind:event="oninput" maxlength="4" />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+                   value="@modelo.UltimosCuatroDigitos" @oninput="OnUltimosCuatroDigitosInput" />
         </div>
         <div class="field">
             <label>Límite de crédito</label>
             <div class="input-currency">
                 <span class="input-currency-prefix">$</span>
-                <input type="number" min="0" step="100" @bind="modelo.LimiteCredito" @bind:event="oninput" />
+                <input type="text" inputmode="decimal" placeholder="0.00" value="@textoLimite" @oninput="OnLimiteInput" />
             </div>
         </div>
         <div class="field">
@@ -85,6 +86,7 @@
     [Parameter] public EventCallback OnCancelado { get; set; }
 
     private NuevaTarjetaModelo modelo = new();
+    private string textoLimite = "";
     private bool guardando;
 
     private bool EsEdicion => TarjetaExistente is not null;
@@ -126,7 +128,20 @@
                 TasaInteresAnual = t.TasaInteresAnual,
                 ColorHex = t.ColorHex
             };
+            textoLimite = t.LimiteCredito.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
         }
+    }
+
+    private void OnUltimosCuatroDigitosInput(ChangeEventArgs e)
+    {
+        var soloDigitos = new string((e.Value?.ToString() ?? "").Where(char.IsDigit).ToArray());
+        modelo.UltimosCuatroDigitos = soloDigitos.Length > 4 ? soloDigitos[..4] : soloDigitos;
+    }
+
+    private void OnLimiteInput(ChangeEventArgs e)
+    {
+        textoLimite = MontoFormato.EnVivo(e.Value?.ToString() ?? "");
+        modelo.LimiteCredito = MontoFormato.AValor(textoLimite) ?? 0m;
     }
 
     private void OnColorPersonalizado(ChangeEventArgs e) => modelo.ColorHex = e.Value?.ToString();

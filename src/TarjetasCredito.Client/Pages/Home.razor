@@ -39,10 +39,10 @@ else
             <label>Monto de la compra</label>
             <div class="input-currency">
                 <span class="input-currency-prefix">$</span>
-                <input type="number" min="0" step="0.01" @bind="monto" @bind:event="oninput" placeholder="0.00" />
+                <input type="text" inputmode="decimal" placeholder="0.00" value="@textoMonto" @oninput="OnMontoInput" />
             </div>
         </div>
-        <button class="btn" @onclick="RecomendarAsync" disabled="@(monto <= 0 || recomendando)">
+        <button class="btn" @onclick="RecomendarAsync" disabled="@(monto is null or <= 0 || recomendando)">
             @(recomendando ? "Calculando..." : "Recomendar tarjeta")
         </button>
 
@@ -110,7 +110,8 @@ else
     private bool cargando = true;
     private bool sinConexion;
     private bool errorServidor;
-    private decimal monto;
+    private decimal? monto;
+    private string textoMonto = "";
     private bool recomendando;
     private RecomendacionResponse? recomendacion;
 
@@ -159,12 +160,18 @@ else
         cargando = false;
     }
 
+    private void OnMontoInput(ChangeEventArgs e)
+    {
+        textoMonto = MontoFormato.EnVivo(e.Value?.ToString() ?? "");
+        monto = MontoFormato.AValor(textoMonto);
+    }
+
     private async Task RecomendarAsync()
     {
         recomendando = true;
         try
         {
-            recomendacion = await RecommendationApi.RecomendarAsync(monto);
+            recomendacion = await RecommendationApi.RecomendarAsync(monto ?? 0);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -207,13 +214,13 @@ else
         if (hoy < r.FechaOptimaPago.Date)
         {
             return ("Puedes seguir usando tu tarjeta",
-                $"Tu corte es el {r.CicloFin:dd/MM}. Si quieres bajar la utilización que se reporta, procura pagar antes del {r.FechaOptimaPago:dd/MM}.",
+                $"Tu corte es el {FechaFormato.CortaSinAnio(r.CicloFin)}. Si quieres bajar la utilización que se reporta, procura pagar antes del {FechaFormato.CortaSinAnio(r.FechaOptimaPago)}.",
                 "");
         }
 
         if (hoy < r.CicloFin.Date)
         {
-            var mensaje = $"Faltan pocos días para tu corte ({r.CicloFin:dd/MM}). Pagar ahora reduce el saldo que se reporta este ciclo y ayuda a tu score.";
+            var mensaje = $"Faltan pocos días para tu corte ({FechaFormato.CortaSinAnio(r.CicloFin)}). Pagar ahora reduce el saldo que se reporta este ciclo y ayuda a tu score.";
             var sugerencia = MontoSugeridoAbono(t);
             return ("🎯 Ventana óptima de pago",
                 string.IsNullOrEmpty(sugerencia) ? mensaje : $"{mensaje} {sugerencia}",
@@ -223,7 +230,7 @@ else
         if (hoy < r.FechaLimitePago.Date)
         {
             return ("Corte hecho — paga a tiempo",
-                $"Tu corte ya pasó. Tienes hasta el {r.FechaLimitePago:dd/MM} para pagar sin generar intereses ni atraso.",
+                $"Tu corte ya pasó. Tienes hasta el {FechaFormato.CortaSinAnio(r.FechaLimitePago)} para pagar sin generar intereses ni atraso.",
                 "");
         }
 

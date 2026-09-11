@@ -69,7 +69,7 @@
                 @foreach (var c in credenciales)
                 {
                     <div class="recordatorio-header card-interactive" style="margin-bottom:0.6rem; padding:0.4rem; border-radius:var(--radius-sm);">
-                        <strong style="flex:1;">Face ID agregado el @c.CreatedAt.LocalDateTime.ToString("dd/MM/yyyy")</strong>
+                        <strong style="flex:1;">Face ID agregado el @FechaFormato.Corta(c.CreatedAt.LocalDateTime)</strong>
                         <button type="button" class="btn btn-danger" style="width:auto;" title="Eliminar" @onclick="() => EliminarPasskeyAsync(c)">🗑️</button>
                     </div>
                 }

@@ -5,6 +5,7 @@
 @inject CreditCardApiService CreditCardApi
 @inject PurchaseApiService PurchaseApi
 @inject DialogService Dialogs
+@inject IJSRuntime JS
 
 <PageTitle>Compras</PageTitle>
 
@@ -29,7 +30,7 @@ else if (tarjetas.Count == 0)
 }
 else
 {
-    <div class="card entrada-suave">
+    <div class="card entrada-suave" id="formulario-compra">
         <h3>@(editandoId is null ? "Registrar compra" : "Editar compra")</h3>
 
         <EditForm Model="modelo" OnValidSubmit="GuardarAsync">
@@ -54,13 +55,7 @@ else
             </div>
             <div class="field">
                 <label>Categoría</label>
-                <input list="categorias-sugeridas" @bind="modelo.Categoria" @bind:event="oninput" placeholder="Elige o escribe una nueva" />
-                <datalist id="categorias-sugeridas">
-                    @foreach (var cat in categoriasSugeridas)
-                    {
-                        <option value="@cat"></option>
-                    }
-                </datalist>
+                <InputCombo @bind-Value="modelo.Categoria" Sugerencias="categoriasSugeridas" Placeholder="Elige o escribe una nueva" />
             </div>
             <div class="field">
                 <label>Fecha</label>
@@ -92,26 +87,41 @@ else
     {
         <EstadoSinConexion SinConexion="sinConexionHistorial" OnReintentar="CargarComprasAsync" />
     }
-    else if (compras.Count == 0)
-    {
-        <EstadoVacio Icono="🧾" Titulo="Aún no registras compras" Descripcion="Las compras que registres arriba van a aparecer aquí, ordenadas por fecha." />
-    }
     else
     {
-        @foreach (var c in compras)
-        {
-            <div class="card compra-item card-interactive entrada-suave">
-                <div>
-                    <strong>@c.Descripcion</strong>
-                    <div class="text-muted">@c.NombreTarjeta · @c.Categoria · @FechaFormato.Corta(c.Fecha)</div>
+        <div class="compras-grid-tarjetas">
+            @foreach (var t in tarjetas)
+            {
+                var comprasDeLaTarjeta = compras.Where(c => c.CreditCardId == t.Id).ToList();
+                <div class="compras-grupo-tarjeta entrada-suave">
+                    <CreditCardVisual Tarjeta="t" />
+
+                    @if (comprasDeLaTarjeta.Count == 0)
+                    {
+                        <p class="text-muted" style="margin-top:0.85rem;">Aún no hay compras en esta tarjeta.</p>
+                    }
+                    else
+                    {
+                        <div class="compras-grupo-lista">
+                            @foreach (var c in comprasDeLaTarjeta)
+                            {
+                                <div class="card compra-item card-interactive entrada-suave @(editandoId == c.Id ? "item-en-edicion" : "")">
+                                    <div>
+                                        <strong>@c.Descripcion</strong>
+                                        <div class="text-muted">@c.Categoria · @FechaFormato.Corta(c.Fecha)</div>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                                        <div class="compra-item-monto">$@c.Monto.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</div>
+                                        <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAsync(c)">✏️</button>
+                                        <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAsync(c)">🗑️</button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
-                <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <div class="compra-item-monto">$@c.Monto.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</div>
-                    <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAsync(c)">✏️</button>
-                    <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAsync(c)">🗑️</button>
-                </div>
-            </div>
-        }
+            }
+        </div>
     }
 }
 
@@ -231,7 +241,7 @@ else
         }
     }
 
-    private void EditarAsync(PurchaseDto c)
+    private async Task EditarAsync(PurchaseDto c)
     {
         editandoId = c.Id;
         modelo = new NuevaCompraModelo
@@ -243,6 +253,8 @@ else
             Fecha = c.Fecha.ToLocalTime(),
             Msi = c.Msi
         };
+
+        await JS.InvokeVoidAsync("domUtils.scrollIntoView", "formulario-compra");
     }
 
     private Task CancelarEdicionAsync()

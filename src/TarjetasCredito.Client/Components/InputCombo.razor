@@ -1,0 +1,43 @@
+@* Combobox propio (texto libre + sugerencias desplegables) — ver SPEC-005 "Combobox de texto libre con
+   sugerencias". Reemplaza el <input list>/<datalist> nativo de HTML: su soporte es inconsistente/pobre
+   en navegadores móviles (Safari iOS en particular), que es justo donde vive esta PWA. *@
+<div class="input-combo" @onfocusout="() => mostrarLista = false">
+    <input type="text" autocomplete="off" placeholder="@Placeholder"
+           value="@Value" @oninput="OnInputAsync" @onfocus="() => mostrarLista = true" />
+    @if (mostrarLista && SugerenciasFiltradas.Count > 0)
+    {
+        <ul class="input-combo-lista">
+            @foreach (var s in SugerenciasFiltradas)
+            {
+                <li @onmousedown:preventDefault="true" @onclick="() => SeleccionarAsync(s)">@s</li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public List<string> Sugerencias { get; set; } = [];
+    [Parameter] public string Placeholder { get; set; } = "";
+
+    private bool mostrarLista;
+
+    private List<string> SugerenciasFiltradas => string.IsNullOrWhiteSpace(Value)
+        ? Sugerencias
+        : Sugerencias.Where(s => s.Contains(Value, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString() ?? "";
+        mostrarLista = true;
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    private async Task SeleccionarAsync(string s)
+    {
+        Value = s;
+        mostrarLista = false;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}
