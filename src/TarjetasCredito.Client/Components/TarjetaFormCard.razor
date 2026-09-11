@@ -102,7 +102,13 @@
         modelo.TasaInteresAnual,
         true,
         TarjetaExistente?.UtilizacionActual ?? 0m,
+        modelo.LimiteCredito - SaldoActualParaVistaPrevia,
         modelo.ColorHex ?? ColorPalette.Colores[0]);
+
+    /// <summary>Saldo usado hoy (independiente del límite que se esté editando) — para que "Disponible"
+    /// en la vista previa reaccione en vivo si el usuario cambia el límite de crédito, sin necesitar
+    /// una consulta nueva al servidor. 0 para una tarjeta nueva (todavía sin compras).</summary>
+    private decimal SaldoActualParaVistaPrevia => TarjetaExistente is null ? 0m : TarjetaExistente.LimiteCredito - TarjetaExistente.Disponible;
 
     protected override void OnParametersSet()
     {

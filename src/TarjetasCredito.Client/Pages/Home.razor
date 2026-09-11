@@ -87,7 +87,7 @@ else
 
             if (recordatorio is not null)
             {
-                var fase = FaseDeCiclo(recordatorio, DateTime.Now.Date);
+                var fase = FaseDeCiclo(recordatorio, t, DateTime.Now.Date);
                 <div class="recordatorio-header card-interactive" style="margin-bottom:0.6rem; padding:0.6rem; border-radius:var(--radius-sm); align-items:flex-start;">
                     <span class="recordatorio-color" style="background:@t.ColorHex; margin-top:0.2rem;"></span>
                     <div style="flex:1;">
@@ -138,10 +138,15 @@ else
                 if (recordatorios.Exitoso)
                 {
                     todosLosRecordatorios = recordatorios.Datos!;
-                    // Solo lo que de verdad está "próximo": sin pagar y su fecha límite no ha pasado —
-                    // lo ya vencido lo cubre la sección "Mejora tu score" con la fase "⚠️ Urgente" (ver
-                    // SPEC-003 "Próximos vencimientos vs. Historial").
-                    proximosVencimientos = todosLosRecordatorios.Where(r => !r.Pagado && r.DiasHastaLimite >= 0).OrderBy(r => r.DiasHastaLimite).Take(3).ToList();
+                    // Solo lo que de verdad está "próximo" Y vence este mes calendario: sin pagar, su
+                    // fecha límite no ha pasado, y cae en el mes en curso — lo ya vencido lo cubre
+                    // "Mejora tu score" con la fase "⚠️ Urgente"; lo de meses futuros simplemente no se
+                    // muestra todavía (pedido explícito del usuario, ver SPEC-003 "Próximos
+                    // vencimientos vs. Historial").
+                    var hoy = DateTime.Now;
+                    proximosVencimientos = todosLosRecordatorios
+                        .Where(r => !r.Pagado && r.DiasHastaLimite >= 0 && r.FechaLimitePago.Month == hoy.Month && r.FechaLimitePago.Year == hoy.Year)
+                        .OrderBy(r => r.DiasHastaLimite).Take(3).ToList();
                 }
             }
         }
@@ -189,10 +194,10 @@ else
 
     /// <summary>
     /// Guía accionable por fase del ciclo (ver SPEC-003 "Guía de fase del ciclo") — no introduce datos
-    /// nuevos, solo interpreta los campos que ya trae PaymentReminderDto para decirle al usuario qué
-    /// hacer hoy con cada tarjeta, no solo cuándo vence.
+    /// nuevos, solo interpreta los campos que ya trae PaymentReminderDto/CreditCardDto para decirle al
+    /// usuario qué hacer hoy con cada tarjeta, no solo cuándo vence.
     /// </summary>
-    private static (string Titulo, string Mensaje, string ClaseBadge) FaseDeCiclo(PaymentReminderDto r, DateTime hoy)
+    private static (string Titulo, string Mensaje, string ClaseBadge) FaseDeCiclo(PaymentReminderDto r, CreditCardDto t, DateTime hoy)
     {
         if (r.Pagado)
         {
@@ -208,8 +213,10 @@ else
 
         if (hoy < r.CicloFin.Date)
         {
+            var mensaje = $"Faltan pocos días para tu corte ({r.CicloFin:dd/MM}). Pagar ahora reduce el saldo que se reporta este ciclo y ayuda a tu score.";
+            var sugerencia = MontoSugeridoAbono(t);
             return ("🎯 Ventana óptima de pago",
-                $"Faltan pocos días para tu corte ({r.CicloFin:dd/MM}). Pagar ahora reduce el saldo que se reporta este ciclo y ayuda a tu score.",
+                string.IsNullOrEmpty(sugerencia) ? mensaje : $"{mensaje} {sugerencia}",
                 "badge-alerta");
         }
 
@@ -223,6 +230,28 @@ else
         return ("⚠️ Urgente",
             "Ya venció tu fecha límite. Un pago tardío es lo que más daña tu score — paga lo antes posible.",
             "badge-danger");
+    }
+
+    /// <summary>
+    /// Monto sugerido de abono en la fase "Ventana óptima de pago" (ver SPEC-003 "Monto sugerido de
+    /// abono"): un rango entre lo mínimo para bajar la utilización al 30% (techo aceptable) y lo
+    /// necesario para llegar al 10% (ideal) — ambos umbrales ya usados en la regla de utilización de
+    /// SPEC-003. Cadena vacía si la tarjeta ya está en un nivel óptimo (≤10%), no hace falta sugerir nada.
+    /// </summary>
+    private static string MontoSugeridoAbono(CreditCardDto t)
+    {
+        if (t.LimiteCredito <= 0 || t.UtilizacionActual <= 0.10m)
+        {
+            return "";
+        }
+
+        var saldoActual = t.LimiteCredito - t.Disponible;
+        var montoPara10 = Math.Max(0m, saldoActual - (0.10m * t.LimiteCredito));
+        var montoPara30 = Math.Max(0m, saldoActual - (0.30m * t.LimiteCredito));
+
+        return montoPara30 <= 0m
+            ? $"Sugerencia: abona hasta ${montoPara10.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} para bajar tu utilización al 10% ideal."
+            : $"Sugerencia: abona entre ${montoPara30.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} y ${montoPara10.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} para mejorar tu score.";
     }
 
     private static string UrgenciaClase(UrgenciaPagoDto urgencia) => urgencia switch

@@ -14,6 +14,7 @@ public record CreditCardDto(
     decimal? TasaInteresAnual,
     bool Activa,
     decimal UtilizacionActual,
+    decimal Disponible,
     string ColorHex);
 
 public record CrearCreditCardRequest(

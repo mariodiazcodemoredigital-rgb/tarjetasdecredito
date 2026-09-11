@@ -18,7 +18,7 @@ public class CreditCardsController(ICreditCardRepository tarjetas, IPurchaseRepo
 
         foreach (var t in activas)
         {
-            resultado.Add(ToDto(t, await CalcularUtilizacionAsync(t, ct)));
+            resultado.Add(ToDto(t, await CalcularSaldoNetoAsync(t, ct)));
         }
 
         return Ok(resultado);
@@ -81,7 +81,7 @@ public class CreditCardsController(ICreditCardRepository tarjetas, IPurchaseRepo
         existente.ColorHex = string.IsNullOrWhiteSpace(request.ColorHex) ? existente.ColorHex : request.ColorHex;
 
         await tarjetas.ActualizarAsync(existente, ct);
-        return Ok(ToDto(existente, await CalcularUtilizacionAsync(existente, ct)));
+        return Ok(ToDto(existente, await CalcularSaldoNetoAsync(existente, ct)));
     }
 
     [HttpDelete("{id:guid}")]
@@ -104,16 +104,22 @@ public class CreditCardsController(ICreditCardRepository tarjetas, IPurchaseRepo
         return null;
     }
 
-    private async Task<decimal> CalcularUtilizacionAsync(CreditCard t, CancellationToken ct)
+    /// <summary>Saldo neto del ciclo vigente (compras - abonos, piso en 0) — ver SPEC-003 "Abonos y
+    /// utilización neta". Base para calcular tanto la utilización como el disponible.</summary>
+    private async Task<decimal> CalcularSaldoNetoAsync(CreditCard t, CancellationToken ct)
     {
         var ultimoCorte = CicloFacturacionHelper.UltimoCorte(t.DiaCorte, DateTime.UtcNow);
         var saldoCompras = await compras.ObtenerSaldoCicloVigenteAsync(UserId, t.Id, ultimoCorte, ct);
         var totalAbonado = await abonos.ObtenerSumaCicloVigenteAsync(UserId, t.Id, ultimoCorte, ct);
-        var saldoNeto = Math.Max(0m, saldoCompras - totalAbonado);
-        return t.LimiteCredito > 0 ? saldoNeto / t.LimiteCredito : 0m;
+        return Math.Max(0m, saldoCompras - totalAbonado);
     }
 
-    private static CreditCardDto ToDto(CreditCard t, decimal utilizacion) => new(
-        t.Id, t.Nombre, t.Banco, t.UltimosCuatroDigitos, (MarcaTarjetaDto)t.Marca,
-        t.LimiteCredito, t.DiaCorte, t.DiasParaPago, t.TasaInteresAnual, t.Activa, utilizacion, t.ColorHex);
+    private static CreditCardDto ToDto(CreditCard t, decimal saldoNeto)
+    {
+        var utilizacion = t.LimiteCredito > 0 ? saldoNeto / t.LimiteCredito : 0m;
+        var disponible = t.LimiteCredito - saldoNeto;
+        return new(
+            t.Id, t.Nombre, t.Banco, t.UltimosCuatroDigitos, (MarcaTarjetaDto)t.Marca,
+            t.LimiteCredito, t.DiaCorte, t.DiasParaPago, t.TasaInteresAnual, t.Activa, utilizacion, disponible, t.ColorHex);
+    }
 }

@@ -61,20 +61,38 @@ Cinco fases posibles para el recordatorio vigente de una tarjeta, evaluadas con 
 
 Implementación: `RecordatorioRelevante`/`FaseDeCiclo` en `Pages/Home.razor` (privados, único consumidor por ahora — si se reusan en otro lugar, ej. el copy de las notificaciones push del Sprint 8, se deben extraer a un helper compartido en vez de duplicar la lógica).
 
+### Monto sugerido de abono en "Ventana óptima de pago" (Sprint 38, 2026-09-11)
+
+**Pedido explícito del usuario**: la fase 3 ("Ventana óptima de pago") solo decía *que* convenía pagar, sin decir *cuánto*. Ahora agrega un rango sugerido, calculado con los mismos umbrales de utilización de la regla 3 de "Fechas de pago óptimas" (arriba: ideal ≤10%, aceptable ≤30%) contra el `saldoActual` y `LimiteCredito` que ya trae `CreditCardDto` (`saldoActual = LimiteCredito - Disponible`, ver "Abonos y utilización neta"):
+
+```
+montoPara10 = max(0, saldoActual - 0.10 × LimiteCredito)   // para llegar al nivel ideal
+montoPara30 = max(0, saldoActual - 0.30 × LimiteCredito)   // para llegar al techo aceptable
+```
+
+- Si la utilización actual ya es ≤10%, no se muestra ningún monto — la tarjeta ya está en un nivel óptimo, sugerir un abono sería ruido.
+- Si `montoPara30` es 0 (utilización entre 10% y 30%), se sugiere un solo monto: *"abona hasta $X para bajar tu utilización al 10% ideal"*.
+- Si la utilización supera 30%, se sugiere un **rango**: *"abona entre $Y (mínimo, llega a 30%) y $X (ideal, llega a 10%)"*.
+
+Es una **opinión, no un monto exacto de estado de cuenta** — se basa en la utilización ya calculada por el Server (compras netas de abonos del ciclo vigente), no en una consulta nueva ni en el `MontoEstadoCuenta` capturado manualmente (que puede no estar disponible todavía). Implementación: `MontoSugeridoAbono` en `Pages/Home.razor`, junto a `FaseDeCiclo` (mismo criterio de "privado hasta que se reuse en otro lado").
+
 ## Abonos y utilización neta (Sprint 38, 2026-09-10)
 
 **Problema real reportado por el usuario**: registró un pago a una tarjeta ("Marcar como pagado" en un recordatorio) y la utilización mostrada en Tarjetas/Dashboard no se movió. Causa raíz: `CreditCardsController.CalcularUtilizacionAsync` solo sumaba compras del ciclo vigente (`IPurchaseRepository.ObtenerSaldoCicloVigenteAsync`) — no existía ningún concepto de "pago/abono" que restara de ese saldo. "Marcar como pagado" solo cambiaba el booleano `Pagado` de un `PaymentReminder`, sin efecto en el cálculo.
 
 **Decisión**: nueva entidad `CardPayment` ("abono") — ver [SPEC-002](SPEC_TarjetasCredito-002-BaseDeDatos.md) — que representa dinero puesto hacia una tarjeta, independiente de `Purchase` (que suma) y de "marcar un recordatorio como pagado" (que hoy solo es una bandera informativa por ciclo).
 
-**Fórmula de utilización** (`CreditCardsController.CalcularUtilizacionAsync`):
+**Fórmula de utilización y disponible** (`CreditCardsController.CalcularSaldoNetoAsync` + `ToDto`):
 ```
 saldoCompras = suma de Purchase.Monto con Fecha >= último corte
 totalAbonado = suma de CardPayment.Monto con Fecha >= último corte
 saldoNeto = max(0, saldoCompras - totalAbonado)
 utilización = saldoNeto / LimiteCredito
+disponible = LimiteCredito - saldoNeto
 ```
-Un abono resta del saldo del ciclo vigente en cuanto se registra, sin importar si es antes o después del corte, y se pueden registrar tantos como se quiera dentro del mismo ciclo — cada uno baja la utilización un poco más (responde directo al caso "pago parcial, y luego quiero abonar otra vez para ir disminuyendo"). `saldoNeto` nunca es negativo (un abono de más dentro de un ciclo con poca compra deja la utilización en 0%, no negativa).
+Un abono resta del saldo del ciclo vigente en cuanto se registra, sin importar si es antes o después del corte, y se pueden registrar tantos como se quiera dentro del mismo ciclo — cada uno baja la utilización (y sube el disponible) un poco más (responde directo al caso "pago parcial, y luego quiero abonar otra vez para ir disminuyendo"). `saldoNeto` nunca es negativo (un abono de más dentro de un ciclo con poca compra deja la utilización en 0%, no negativa) — pero `disponible` **sí** puede quedar negativo si el saldo excede el límite (sobregiro), a propósito, para no ocultarle al usuario que se pasó del límite (ver [SPEC-005](SPEC_TarjetasCredito-005-UI.md) "Tarjetas apiladas").
+
+**`Disponible` en `CreditCardDto` (Sprint 38, pedido explícito del usuario)**: se expone junto a `UtilizacionActual` para que Tarjetas/Dashboard muestren "cuánto me queda", no solo el porcentaje usado — mismo `saldoNeto` de la fórmula de arriba, sin cálculo adicional en el cliente.
 
 **"Marcar como pagado" ahora también crea un abono**: `PaymentRemindersController.MarcarPagado`, si recibe (o ya tenía guardado) un `MontoEstadoCuenta`, además de marcar `Pagado=true` crea automáticamente un `CardPayment` por ese monto (`Fecha` = `FechaPago`, `PaymentReminderId` = el recordatorio, para trazabilidad). Así el flujo que el usuario ya usaba (Historial → "Marcar como pagado") queda corregido sin que tenga que aprender una pantalla nueva. Si no se captura monto, no se crea abono — igual que hoy, sin dato no hay nada que restar.
 

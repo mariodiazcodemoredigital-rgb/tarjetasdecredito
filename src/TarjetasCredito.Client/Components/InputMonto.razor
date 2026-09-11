@@ -1,0 +1,38 @@
+@* Campo de monto con máscara de moneda en vivo (separador de miles) — ver SPEC-005 "Máscara de
+   moneda". Sincroniza el valor con Blazor solo en blur/change (mismo criterio que el resto de los
+   campos de Monto nativos de la app), la máscara en vivo mientras se escribe la maneja currencyMask.js
+   directamente sobre el DOM. *@
+@inject IJSRuntime JS
+
+<div class="input-currency">
+    <span class="input-currency-prefix">$</span>
+    <input type="text" inputmode="decimal" placeholder="@Placeholder" @ref="_inputRef"
+           value="@Value?.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)"
+           @onchange="OnChangeAsync" disabled="@Disabled" />
+</div>
+
+@code {
+    [Parameter] public decimal? Value { get; set; }
+    [Parameter] public EventCallback<decimal?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "0.00";
+    [Parameter] public bool Disabled { get; set; }
+
+    private ElementReference _inputRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("currencyMask.attach", _inputRef);
+        }
+    }
+
+    private async Task OnChangeAsync(ChangeEventArgs e)
+    {
+        var texto = e.Value?.ToString()?.Replace(",", "");
+        Value = decimal.TryParse(texto, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var monto)
+            ? monto
+            : null;
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

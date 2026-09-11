@@ -33,12 +33,7 @@
             </div>
             <div class="field">
                 <label>Monto</label>
-                <div class="input-currency">
-                    <span class="input-currency-prefix">$</span>
-                    <input type="number" min="0.01" step="0.01" placeholder="0.00"
-                           value="@nuevoAbono.Monto?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                           @onchange="@(e => nuevoAbono.Monto = ParseMonto(e.Value?.ToString()))" />
-                </div>
+                <InputMonto @bind-Value="nuevoAbono.Monto" />
             </div>
             <div class="field">
                 <label>Fecha</label>
@@ -75,7 +70,7 @@
                         <div class="text-muted">@FechaFormato.Corta(a.Fecha)@(string.IsNullOrWhiteSpace(a.Nota) ? "" : $" · {a.Nota}")</div>
                     </div>
                     <div style="display:flex; align-items:center; gap:0.5rem;">
-                        <div class="compra-item-monto">$@a.Monto.ToString("N2")</div>
+                        <div class="compra-item-monto">$@a.Monto.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</div>
                         <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAbono(a)">✏️</button>
                         <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAbonoAsync(a)">🗑️</button>
                     </div>
@@ -123,12 +118,7 @@ else
 
                 <div class="field">
                     <label>Monto del estado de cuenta (opcional)</label>
-                    <div class="input-currency">
-                        <span class="input-currency-prefix">$</span>
-                        <input type="number" min="0" step="0.01"
-                               value="@montoPorId.GetValueOrDefault(r.Id)?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                               @onchange="@(e => montoPorId[r.Id] = ParseMonto(e.Value?.ToString()))" />
-                    </div>
+                    <InputMonto Value="@montoPorId.GetValueOrDefault(r.Id)" ValueChanged="@(v => montoPorId[r.Id] = v)" />
                 </div>
 
                 <button class="btn" style="width:auto;" @onclick="() => MarcarPagadoAsync(r)">Marcar como pagado</button>
@@ -177,7 +167,7 @@ else
                     </span>
                     @if (r.MontoEstadoCuenta.HasValue)
                     {
-                        <span class="text-muted">$@r.MontoEstadoCuenta.Value.ToString("N2")</span>
+                        <span class="text-muted">$@r.MontoEstadoCuenta.Value.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</span>
                     }
                 </div>
 
@@ -185,12 +175,7 @@ else
                 {
                     <div class="field">
                         <label>Monto del estado de cuenta (opcional)</label>
-                        <div class="input-currency">
-                            <span class="input-currency-prefix">$</span>
-                            <input type="number" min="0" step="0.01"
-                                   value="@montoPorId.GetValueOrDefault(r.Id)?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                                   @onchange="@(e => montoPorId[r.Id] = ParseMonto(e.Value?.ToString()))" />
-                        </div>
+                        <InputMonto Value="@montoPorId.GetValueOrDefault(r.Id)" ValueChanged="@(v => montoPorId[r.Id] = v)" />
                     </div>
                     <button class="btn" style="width:auto;" @onclick="() => MarcarPagadoAsync(r)">Marcar como pagado</button>
                 }
@@ -235,9 +220,18 @@ else
         .OrderByDescending(a => a)
         .ToList();
 
-    /// <summary>Un recordatorio es "próximo" (vive en Pendientes, no en Historial) mientras esté sin
-    /// pagar y su fecha límite no haya pasado — ver SPEC-003 "Próximos vencimientos vs. Historial".</summary>
+    /// <summary>Un recordatorio es "próximo" (candidato a Pendientes, nunca a Historial) mientras esté
+    /// sin pagar y su fecha límite no haya pasado — ver SPEC-003 "Próximos vencimientos vs. Historial".
+    /// No mira el mes: eso lo decide <see cref="EsDelMesActual"/> por separado, para no mezclar "ya
+    /// venció" (Historial) con "todavía no le toca este mes" (simplemente no se muestra en ningún lado
+    /// todavía) — mezclarlos etiquetaría como "Vencido" algo que no lo está.</summary>
     private static bool EsProximo(PaymentReminderDto r) => !r.Pagado && r.DiasHastaLimite >= 0;
+
+    /// <summary>Pendientes solo muestra lo que vence este mes calendario — pedido explícito del usuario
+    /// (2026-09-11): un ciclo cuya fecha límite cae en un mes futuro no debe listarse todavía, aunque ya
+    /// sea el ciclo vigente de esa tarjeta. Ver SPEC-003 "Próximos vencimientos vs. Historial".</summary>
+    private static bool EsDelMesActual(PaymentReminderDto r)
+        => r.FechaLimitePago.Month == DateTime.Now.Month && r.FechaLimitePago.Year == DateTime.Now.Year;
 
     protected override async Task OnInitializedAsync()
     {
@@ -256,7 +250,7 @@ else
         if (resultado.Exitoso)
         {
             todosLosRecordatorios = resultado.Datos!;
-            pendientes = todosLosRecordatorios.Where(EsProximo).OrderBy(r => r.DiasHastaLimite).ToList();
+            pendientes = todosLosRecordatorios.Where(r => EsProximo(r) && EsDelMesActual(r)).OrderBy(r => r.DiasHastaLimite).ToList();
 
             foreach (var r in pendientes)
             {
@@ -297,9 +291,6 @@ else
         }
         cargandoAbonos = false;
     }
-
-    private static decimal? ParseMonto(string? valor)
-        => decimal.TryParse(valor, out var monto) ? monto : null;
 
     private async Task GuardarAbonoAsync()
     {

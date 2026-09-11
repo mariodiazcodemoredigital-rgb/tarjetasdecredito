@@ -24,7 +24,7 @@
         <div class="credit-card-visual-header-right">
             <MarcaBadge Marca="Tarjeta.Marca" />
             <div class="credit-card-visual-datos">
-                <span>Límite $@Tarjeta.LimiteCredito.ToString("N0")</span>
+                <span>Límite $@Tarjeta.LimiteCredito.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</span>
                 <span>Corte día @Tarjeta.DiaCorte</span>
             </div>
         </div>
@@ -32,7 +32,8 @@
     <div class="alias">@Tarjeta.Nombre</div>
     <div class="digitos">•••• •••• •••• @Tarjeta.UltimosCuatroDigitos</div>
     <div class="meta">
-        <span>Utilización @Tarjeta.UtilizacionActual.ToString("P0")</span>
+        <span>Disponible $@Tarjeta.Disponible.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</span>
+        <span>Utilización @Tarjeta.UtilizacionActual.ToString("P0", System.Globalization.CultureInfo.InvariantCulture)</span>
     </div>
 </div>
 

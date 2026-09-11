@@ -46,12 +46,7 @@ else
             </div>
             <div class="field">
                 <label>Monto</label>
-                <div class="input-currency">
-                    <span class="input-currency-prefix">$</span>
-                    <input type="number" min="0.01" step="0.01" placeholder="0.00"
-                           value="@modelo.Monto?.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                           @onchange="@(e => modelo.Monto = ParseMonto(e.Value?.ToString()))" />
-                </div>
+                <InputMonto @bind-Value="modelo.Monto" />
             </div>
             <div class="field">
                 <label>Descripción</label>
@@ -111,7 +106,7 @@ else
                     <div class="text-muted">@c.NombreTarjeta · @c.Categoria · @FechaFormato.Corta(c.Fecha)</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <div class="compra-item-monto">$@c.Monto.ToString("N2")</div>
+                    <div class="compra-item-monto">$@c.Monto.ToString("N2", System.Globalization.CultureInfo.InvariantCulture)</div>
                     <button type="button" class="btn btn-secondary" style="width:auto; padding:0.35rem 0.55rem;" title="Editar" @onclick="() => EditarAsync(c)">✏️</button>
                     <button type="button" class="btn btn-danger" style="width:auto; padding:0.35rem 0.55rem;" title="Eliminar" @onclick="() => EliminarAsync(c)">🗑️</button>
                 </div>
@@ -291,9 +286,6 @@ else
             await Dialogs.ToastErrorAsync("No se pudo conectar. Revisa tu conexión a internet.");
         }
     }
-
-    private static decimal? ParseMonto(string? valor)
-        => decimal.TryParse(valor, out var monto) ? monto : null;
 
     private class NuevaCompraModelo
     {
