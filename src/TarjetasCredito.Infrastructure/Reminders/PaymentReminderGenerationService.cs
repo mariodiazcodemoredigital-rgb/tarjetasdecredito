@@ -15,7 +15,7 @@ public class PaymentReminderGenerationService(ICreditCardRepository tarjetas, IP
 {
     public async Task AsegurarRecordatoriosAsync(string userId, CancellationToken ct = default)
     {
-        var ahora = DateTime.UtcNow;
+        var ahora = FechaNegocioHelper.AhoraMexico();
         var activas = await tarjetas.ObtenerPorUsuarioAsync(userId, soloActivas: true, ct);
 
         foreach (var tarjeta in activas)

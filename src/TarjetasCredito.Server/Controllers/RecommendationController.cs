@@ -17,7 +17,7 @@ public class RecommendationController(ICreditCardRepository tarjetas, IPurchaseR
             return BadRequest("El monto debe ser mayor a cero.");
         }
 
-        var fecha = (request.Fecha ?? DateTime.UtcNow).Date;
+        var fecha = (request.Fecha ?? FechaNegocioHelper.AhoraMexico()).Date;
         var activas = await tarjetas.ObtenerPorUsuarioAsync(UserId, soloActivas: true, ct);
 
         var evaluadas = new List<TarjetaEvaluada>();

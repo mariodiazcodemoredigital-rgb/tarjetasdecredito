@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TarjetasCredito.Domain.Entities;
+using TarjetasCredito.Domain.Reglas;
 using TarjetasCredito.Domain.Repositories;
 using TarjetasCredito.Infrastructure.Push;
 using WebPush;
@@ -48,7 +49,7 @@ public class PaymentReminderPushHostedService(
         var sender = scope.ServiceProvider.GetRequiredService<IWebPushSenderService>();
 
         var userIds = await tarjetas.ObtenerUserIdsConTarjetasActivasAsync(ct);
-        var hoy = DateTime.UtcNow.Date;
+        var hoy = FechaNegocioHelper.AhoraMexico().Date;
 
         foreach (var userId in userIds)
         {

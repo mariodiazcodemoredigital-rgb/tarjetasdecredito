@@ -108,7 +108,7 @@ public class CreditCardsController(ICreditCardRepository tarjetas, IPurchaseRepo
     /// utilización neta". Base para calcular tanto la utilización como el disponible.</summary>
     private async Task<decimal> CalcularSaldoNetoAsync(CreditCard t, CancellationToken ct)
     {
-        var ultimoCorte = CicloFacturacionHelper.UltimoCorte(t.DiaCorte, DateTime.UtcNow);
+        var ultimoCorte = CicloFacturacionHelper.UltimoCorte(t.DiaCorte, FechaNegocioHelper.AhoraMexico());
         var saldoCompras = await compras.ObtenerSaldoCicloVigenteAsync(UserId, t.Id, ultimoCorte, ct);
         var totalAbonado = await abonos.ObtenerSumaCicloVigenteAsync(UserId, t.Id, ultimoCorte, ct);
         return Math.Max(0m, saldoCompras - totalAbonado);

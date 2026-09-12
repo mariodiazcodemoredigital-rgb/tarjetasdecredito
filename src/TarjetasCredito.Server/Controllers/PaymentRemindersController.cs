@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using TarjetasCredito.Domain.Entities;
+using TarjetasCredito.Domain.Reglas;
 using TarjetasCredito.Domain.Repositories;
 using TarjetasCredito.Infrastructure.Reminders;
 using TarjetasCredito.Shared.Dtos;
@@ -23,7 +24,7 @@ public class PaymentRemindersController(
     {
         await generador.AsegurarRecordatoriosAsync(UserId, ct);
 
-        var ahora = DateTime.UtcNow;
+        var ahora = FechaNegocioHelper.AhoraMexico();
         var todos = await recordatorios.ObtenerPorUsuarioAsync(UserId, ct);
         return Ok(todos.Select(r => ToDto(r, ahora)).ToList());
     }
@@ -61,7 +62,7 @@ public class PaymentRemindersController(
                 PaymentReminderId = recordatorio.Id
             }, ct);
         }
-        return Ok(ToDto(recordatorio, DateTime.UtcNow));
+        return Ok(ToDto(recordatorio, FechaNegocioHelper.AhoraMexico()));
     }
 
     private static PaymentReminderDto ToDto(PaymentReminder r, DateTime ahora)
